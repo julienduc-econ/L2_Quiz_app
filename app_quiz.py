@@ -74,7 +74,7 @@ def enregistrer_et_afficher_leaderboard():
     except Exception as e:
         st.error("Désolé, impossible de mettre à jour le classement pour le moment.")
         # Optionnel : décommenter la ligne suivante pour voir l'erreur technique exacte
-        # st.write(f"Erreur technique : {e}")
+        st.write(f"Erreur technique : {e}")
 
 
 NB_QUESTIONS = 5
@@ -218,6 +218,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
