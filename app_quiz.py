@@ -9,32 +9,50 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION PAGE ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- CSS "BLINDÉ" POUR FORCER LES COULEURS ---
+# --- CSS AVANCÉ POUR POSITIONNEMENT ET COULEURS ---
 st.markdown("""
     <style>
-        /* 1. STYLE DES ONGLETS (TABS) */
-        
-        /* Cible tous les boutons d'onglets par défaut (INACTIFS) */
-        button[data-baseweb="tab"] {
-            background-color: #e0e0ef !important; /* GRIS PLUS FONCÉ pour bien voir la différence */
-            border: 1px solid #d0d0d0 !important;
-            color: #555 !important;               /* Texte gris foncé */
-            font-size: 18px !important;           /* Texte plus gros */
-            padding: 15px 30px !important;        /* Onglet plus large et haut */
-            border-radius: 5px 5px 0px 0px !important;
-            margin-right: 5px !important;         /* Petit espace entre les onglets */
+        /* 1. REMONTER LE CONTENU TOUT EN HAUT */
+        .block-container {
+            padding-top: 1rem !important; /* Réduit la marge haute au minimum (défaut ~5rem) */
+            padding-bottom: 5rem;
         }
 
-        /* Cible uniquement l'onglet SÉLECTIONNÉ (ACTIF) */
-        button[data-baseweb="tab"][aria-selected="true"] {
-            background-color: #ffffff !important; /* BLANC PUR */
-            color: #000000 !important;            /* Texte NOIR */
-            border-top: 4px solid #ff4b4b !important; /* Barre rouge au dessus */
-            border-bottom: 1px solid #ffffff !important; /* On efface la bordure du bas pour lier au contenu */
-            font-weight: bold !important;
+        /* 2. BARRE D'ONGLETS GRISE (Comme un menu) */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 10px;
+            background-color: #f0f2f6; /* FOND GRIS DERRIÈRE LES ONGLETS */
+            padding: 10px 10px 0px 10px;
+            border-radius: 10px 10px 0px 0px;
+            border-bottom: 2px solid #d0d0d0;
         }
 
-        /* 2. STYLE DES BOUTONS CLASSIQUES (GRIS FONCÉ & BLANC) */
+        /* 3. ONGLETS INACTIFS (Plus foncés pour contraster) */
+        .stTabs [data-baseweb="tab"] {
+            height: auto;
+            background-color: #dbe0ea; /* GRIS PLUS SOUTENU */
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 8px 8px 0px 0px;
+            padding: 10px 25px;
+            font-size: 18px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        /* 4. ONGLET ACTIF (Blanc pur qui ressort) */
+        .stTabs [aria-selected="true"] {
+            background-color: #ffffff !important;
+            color: #000 !important;
+            border-top: 3px solid #ff4b4b !important; /* Ligne rouge */
+            border-left: 1px solid #d0d0d0 !important;
+            border-right: 1px solid #d0d0d0 !important;
+            border-bottom: 2px solid #ffffff !important; /* Masque la ligne du bas pour fusionner */
+            margin-bottom: -2px; /* Astuce pour chevaucher la bordure */
+            z-index: 1;
+        }
+
+        /* 5. BOUTONS GRIS FONCÉ */
         div.stButton > button {
             background-color: #262730 !important;
             color: white !important;
@@ -43,16 +61,26 @@ st.markdown("""
             font-size: 16px;
             padding: 10px 24px;
         }
-        
         div.stButton > button:hover {
             background-color: #3e404b !important;
-            color: white !important;
         }
 
-        /* Masquer le pied de page Streamlit */
+        /* 6. FOOTER & DIVERS */
+        #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        .block-container {padding-top: 2rem;}
+        header {visibility: hidden;} /* Cache la barre colorée par défaut de Streamlit */
+        
+        .custom-footer {
+            position: fixed; left: 0; bottom: 0; width: 100%;
+            background-color: white; color: #555; text-align: center;
+            padding: 10px 0px; font-size: 13px; border-top: 1px solid #eaeaea; z-index: 999;
+        }
     </style>
+
+    <div class="custom-footer">
+        Conçu par <b>Julien Duc</b> - 2026 | 
+        <a href="https://julienduc-econ.github.io/L2_MF/" target="_blank" style="text-decoration: none; color: #ff4b4b;">📖 Accéder au cours</a>
+    </div>
 """, unsafe_allow_html=True)
 
 
@@ -138,10 +166,14 @@ if 'game_started' not in st.session_state:
 # STRUCTURE PRINCIPALE
 # ==============================================================================
 
+# Note : Les onglets seront maintenant tout en haut grâce au padding-top: 1rem
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
 # --- ONGLET 1 : JEU ---
 with tab_jeu:
+    # On ajoute un espace pour ne pas que le titre colle trop aux onglets
+    st.markdown("<br>", unsafe_allow_html=True) 
+    
     if not st.session_state['game_started']:
         st.markdown("## 🎓 Quiz de Mathématiques Financières")
         st.info("Le mode Challenge enregistre votre score pour le classement général.")
@@ -210,7 +242,7 @@ with tab_jeu:
             st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
             
             if st.session_state['is_challenge']:
-                if duree >= 0: # TODO: Remettre le timer réel
+                if duree >= 0: 
                     enregistrer_score()
                     st.info("👉 Allez voir l'onglet 'Classement Général' pour voir votre moyenne !")
                 else:
@@ -222,6 +254,7 @@ with tab_jeu:
 
 # --- ONGLET 2 : LEADERBOARD ---
 with tab_leaderboard:
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("## 🏆 Classement par Moyenne")
     st.write("Ce classement calcule la moyenne de vos scores pour la catégorie sélectionnée.")
     
