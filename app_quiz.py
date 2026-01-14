@@ -35,22 +35,25 @@ def enregistrer_et_afficher_leaderboard():
     
     new_row = pd.DataFrame([{
         "Date": datetime.now().strftime("%d/%m/%Y"),
-        "Nom": st.session_state['user_nom'],
-        "Prénom": st.session_state['user_prenom'],
-        "Pseudo": st.session_state['user_pseudo'],
+        "Nom": st.session_state.get('user_nom', 'Inconnu'),
+        "Prénom": st.session_state.get('user_prenom', 'Inconnu'),
+        "Pseudo": st.session_state.get('user_pseudo', 'Anonyme'),
         "Score": st.session_state['score'],
         "Thème": st.session_state['quiz_category'],
         "Temps": round(duree_min, 1)
     }])
 
-    # 2. Lecture et mise à jour
+    # 2. Lecture sécurisée
     try:
         existing_data = conn.read()
-        updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+        # Si le fichier est vide ou n'a pas les bonnes colonnes
+        if existing_data is None or existing_data.empty:
+            updated_df = new_row
+        else:
+            updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+        
         conn.update(data=updated_df)
-        st.success("✅ Score enregistré dans la base de données !")
-    except Exception as e:
-        st.error("Erreur lors de l'enregistrement. Vérifiez les accès du GSheet.")
+        st.success("✅ Score enregistré !")
 
     # 3. Affichage du Leaderboard Public (Top 10)
     st.markdown("### 🏆 Leaderboard (Top 10)")
@@ -206,6 +209,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
