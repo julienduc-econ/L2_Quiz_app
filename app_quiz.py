@@ -30,10 +30,7 @@ st.markdown("""
 def enregistrer_et_afficher_leaderboard():
     try:
         # 1. CONFIGURATION
-        # On récupère l'URL pour cibler le bon fichier
         url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        
-        # Connexion directe (sans artifice de réparation)
         conn = st.connection("gsheets", type=GSheetsConnection)
 
         # 2. PRÉPARATION DE LA DONNÉE
@@ -49,23 +46,29 @@ def enregistrer_et_afficher_leaderboard():
             "Temps": round(duree_min, 1)
         }])
 
-        # 3. LECTURE & FUSION
+        # 3. LECTURE (AVEC TTL=0 POUR FORCER LA MISE À JOUR)
         try:
-            existing_data = conn.read(spreadsheet=url)
+            # ttl=0 oblige Streamlit à ne pas utiliser le cache et à lire le vrai fichier
+            existing_data = conn.read(spreadsheet=url, ttl=0)
         except:
             existing_data = pd.DataFrame()
 
+        # 4. FUSION
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
             existing_data = existing_data.dropna(how='all')
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # 4. ECRITURE
+        # 5. ECRITURE
         conn.update(spreadsheet=url, data=updated_df)
+        
+        # On vide le cache manuellement après l'écriture pour être sûr
+        st.cache_data.clear()
+        
         st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, ton score est enregistré !")
 
-        # 5. AFFICHAGE DU TOP 10
+        # 6. AFFICHAGE DU TOP 10
         st.markdown("### 🥇 Classement (Top 10)")
         leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
         leaderboard = (leaderboard
@@ -198,6 +201,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
