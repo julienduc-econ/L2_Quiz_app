@@ -32,15 +32,18 @@ def enregistrer_et_afficher_leaderboard():
         # 1. RÉCUPÉRATION ET NETTOYAGE DES SECRETS
         creds = st.secrets["connections"]["gsheets"].to_dict()
         
-        # Sécurité : Si la clé contient des doubles antislashs (\\n), on les répare
+        # On extrait le type pour éviter le conflit "multiple values for type"
+        # car on passe déjà GSheetsConnection en premier argument
+        creds_type = creds.pop("type", None) 
+        
+        # On répare la clé si nécessaire
         if "private_key" in creds:
             creds["private_key"] = creds["private_key"].replace("\\n", "\n")
         
-        # 2. CONNEXION
+        # 2. CONNEXION (Maintenant sans conflit de 'type')
         conn = st.connection("gsheets", type=GSheetsConnection, **creds)
         
         # 3. PRÉPARATION DES DONNÉES
-        # On s'assure que les variables existent pour éviter l'erreur initiale
         nom = st.session_state.get('user_nom', 'Inconnu')
         prenom = st.session_state.get('user_prenom', 'Inconnu')
         pseudo = st.session_state.get('user_pseudo', 'Anonyme')
@@ -61,7 +64,6 @@ def enregistrer_et_afficher_leaderboard():
         }])
 
         # 4. LECTURE ET MISE À JOUR
-        # On force la lecture pour avoir le tableau le plus récent
         try:
             existing_data = conn.read()
         except:
@@ -70,13 +72,12 @@ def enregistrer_et_afficher_leaderboard():
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
-            # On nettoie les lignes vides éventuelles du GSheet
             existing_data = existing_data.dropna(how='all')
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
         # ENREGISTREMENT
         conn.update(data=updated_df)
-        st.success(f"🏆 Bravo {pseudo}, ton score de {score} a été enregistré !")
+        st.success(f"🏆 Bravo {pseudo}, ton score a été enregistré !")
 
         # 5. AFFICHAGE DU CLASSEMENT
         st.markdown("### 🥇 Top 10")
@@ -211,4 +212,5 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
