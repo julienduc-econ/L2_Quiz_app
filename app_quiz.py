@@ -28,9 +28,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def enregistrer_et_afficher_leaderboard():
-    try:
-        # 1. Connexion via le Service Account configuré dans les secrets
-        conn = st.connection("gsheets", type=GSheetsConnection)
+    # RÉPARATION DE LA CLÉ PRIVÉE
+    if "gsheets" in st.secrets.get("connections", {}):
+        raw_key = st.secrets["connections"]["gsheets"]["private_key"]
+        # On s'assure que les sauts de ligne sont bien interprétés par Python
+        st.secrets["connections"]["gsheets"]["private_key"] = raw_key.replace("\\n", "\n")
+    
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # ... le reste du code
         
         # 2. Préparation de la nouvelle ligne
         duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
@@ -221,6 +226,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
