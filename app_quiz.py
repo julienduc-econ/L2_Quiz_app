@@ -29,16 +29,27 @@ st.markdown("""
 
 def enregistrer_et_afficher_leaderboard():
     try:
-        # 1. RÉCUPÉRATION DE L'URL
-        # On va chercher l'URL manuellement dans les secrets
-        # (Comme ça, peu importe si la bibliothèque attend 'url' ou 'spreadsheet', on l'a)
-        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-
-        # 2. CONNEXION SIMPLE
-        # On ne passe AUCUN argument ici. La connexion va lire le fichier secrets toute seule pour l'auth.
+        # --- 1. CONFIGURATION ROBUSTE ---
+        # On laisse Streamlit gérer la connexion de base
         conn = st.connection("gsheets", type=GSheetsConnection)
 
-        # 3. PRÉPARATION DE LA DONNÉE
+        # On récupère l'URL manuellement (car le nom 'spreadsheet' pose parfois problème)
+        try:
+            url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+        except:
+            st.error("L'URL du Google Sheet est introuvable dans les secrets.")
+            return
+
+        # SÉCURITÉ : Si jamais la clé a des \n (format texte), on les convertit
+        # Si la clé a déjà des vrais sauts de ligne (format triple guillemets), ceci ne change rien.
+        try:
+            raw_key = st.secrets["connections"]["gsheets"]["private_key"]
+            if "\\n" in raw_key:
+                st.secrets["connections"]["gsheets"]["private_key"] = raw_key.replace("\\n", "\n")
+        except:
+            pass # Si ça échoue, on laisse la connexion essayer telle quelle
+
+        # --- 2. PRÉPARATION DES DONNÉES ---
         duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
         
         new_row = pd.DataFrame([{
@@ -51,27 +62,24 @@ def enregistrer_et_afficher_leaderboard():
             "Temps": round(duree_min, 1)
         }])
 
-        # 4. LECTURE (Avec URL explicite)
+        # --- 3. LECTURE & ECRITURE ---
         try:
-            # On dit précisément quel fichier lire grâce à l'URL récupérée plus haut
+            # On force l'usage de l'URL spécifique
             existing_data = conn.read(spreadsheet=url)
         except Exception:
             existing_data = pd.DataFrame()
 
-        # 5. FUSION
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
-            # On nettoie pour éviter les lignes vides
             existing_data = existing_data.dropna(how='all')
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # 6. ECRITURE (Avec URL explicite)
+        # Mise à jour dans le Cloud
         conn.update(spreadsheet=url, data=updated_df)
-        
         st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, score enregistré !")
 
-        # 7. AFFICHAGE DU CLASSEMENT
+        # --- 4. AFFICHAGE DU TOP 10 ---
         st.markdown("### 🥇 Classement (Top 10)")
         leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
         leaderboard = (leaderboard
@@ -82,7 +90,7 @@ def enregistrer_et_afficher_leaderboard():
         st.table(leaderboard)
 
     except Exception as e:
-        st.error(f"Détail de l'erreur : {e}")
+        st.error(f"Erreur technique : {e}")
         
 # --- CONSTANTES ---
 NB_QUESTIONS = 2
@@ -204,6 +212,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
