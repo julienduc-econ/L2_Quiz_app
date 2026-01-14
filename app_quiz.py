@@ -28,14 +28,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def enregistrer_et_afficher_leaderboard():
-    # RÉPARATION DE LA CLÉ PRIVÉE
-    if "gsheets" in st.secrets.get("connections", {}):
-        raw_key = st.secrets["connections"]["gsheets"]["private_key"]
-        # On s'assure que les sauts de ligne sont bien interprétés par Python
-        st.secrets["connections"]["gsheets"]["private_key"] = raw_key.replace("\\n", "\n")
-    
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # ... le reste du code
+    try:
+        # 1. RÉPARATION DE LA CLÉ PRIVÉE (SÉCURITÉ TOML)
+        if "gsheets" in st.secrets.get("connections", {}):
+            raw_key = st.secrets["connections"]["gsheets"]["private_key"]
+            st.secrets["connections"]["gsheets"]["private_key"] = raw_key.replace("\\n", "\n")
+        
+        conn = st.connection("gsheets", type=GSheetsConnection)
         
         # 2. Préparation de la nouvelle ligne
         duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
@@ -62,34 +61,30 @@ def enregistrer_et_afficher_leaderboard():
         else:
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # L'écriture automatique (invisible pour l'étudiant)
         conn.update(data=updated_df)
-        st.success("🏆 Votre score a été enregistré automatiquement au classement !")
+        st.success("🏆 Votre score a été enregistré au classement !")
 
         # 5. Affichage du Top 10
         st.markdown("---")
         st.markdown("### 🥇 Top 10 des Meilleurs Scores")
         
-        # On ne garde que les infos publiques
         leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
         leaderboard = (leaderboard
             .sort_values(by=["Score", "Temps"], ascending=[False, True])
             .drop_duplicates(subset=["Pseudo"])
             .head(10))
         
-        # On remet l'index pour que ça affiche 1, 2, 3...
         leaderboard.index = range(1, len(leaderboard) + 1)
         st.table(leaderboard)
 
     except Exception as e:
         st.error(f"Erreur lors de l'accès au classement : {e}")
 
-
+# --- CONSTANTES ---
 NB_QUESTIONS = 2
 
 # --- LOGIQUE DE GÉNÉRATION ---
 def generer_question(categorie_choisie):
-    types_possibles = []
     cat_map = {
         "Capitalisation": ["capitalisation"],
         "Actualisation": ["actu_simple", "actu_compose"],
@@ -101,30 +96,17 @@ def generer_question(categorie_choisie):
     
     K = random.choice([1000, 5000, 10000, 20000])
     r = round(random.randint(10, 60) * 0.12, 2)
-    q = {}
-
+    
     if choix == "capitalisation":
         type_unite = random.choice(["jours", "mois", "annees"])
         valeur_temps = random.randint(30, 700) if type_unite=="jours" else random.randint(2, 24) if type_unite=="mois" else random.randint(1, 10)
         txt_duree = f"{valeur_temps} {type_unite}"
         sol, mode = fin.capitalisation_auto(K, r, valeur_temps, type_unite)
-        
-        # Variantes
-        v = random.randint(1, 4)
-        if v == 1: enonce = f"Valeur acquise de **{fin.fmt(K)}** à **{r}%** pendant **{txt_duree}** ?"
-        elif v == 2: enonce = f"Combien recevrez-vous pour un prêt de **{fin.fmt(K)}** à **{r}%** sur **{txt_duree}** ?"
-        else: enonce = f"Calculer le capital final : **{fin.fmt(K)}**, taux **{r}%**, durée **{txt_duree}**."
-        
-        q = {"cat": f"Capitalisation ({mode})", "txt": enonce, "sol": sol, "unit": "€"}
-    
-    # ... (Ajouter ici les autres catégories : actu_simple, van_calc, etc.) ...
-    # Par défaut si non implémenté :
+        enonce = f"Valeur acquise de **{fin.fmt(K)}** à **{r}%** pendant **{txt_duree}** ?"
+        return {"cat": f"Capitalisation ({mode})", "txt": enonce, "sol": sol, "unit": "€"}
     else:
-        q = {"cat": "Général", "txt": "Question de test", "sol": 0, "unit": "€"}
-        
-    return q
+        return {"cat": "Général", "txt": "Question de test", "sol": 0, "unit": "€"}
 
-# --- INITIALISATION ---
 def init_new_game(categorie, challenge_mode):
     st.session_state['quiz_category'] = categorie
     st.session_state['quiz_data'] = [generer_question(categorie) for _ in range(NB_QUESTIONS)]
@@ -139,10 +121,10 @@ def init_new_game(categorie, challenge_mode):
 if 'game_started' not in st.session_state:
     st.session_state['game_started'] = False
 
-# --- UI ---
+# --- UI PRINCIPALE ---
 if not st.session_state['game_started']:
     st.markdown("## 🎓 Quiz de Mathématiques Financières")
-    st.info("Ce quiz génère des questions aléatoires. Le mode Challenge masque les réponses et permet d'intégrer le classement.")
+    st.info("Le mode Challenge masque les réponses et permet d'intégrer le classement.")
     
     col1, col2, col3 = st.columns(3)
     nom = col1.text_input("Nom")
@@ -150,22 +132,18 @@ if not st.session_state['game_started']:
     pseudo = col3.text_input("Pseudo (Leaderboard)")
 
     choix_cat = st.selectbox("Thème", ["Tout", "Capitalisation", "Actualisation", "VAN", "TAEG"])
-    mode_ch = st.checkbox("🏆 Activer le Mode Challenge (Masquer les corrections)")
+    mode_ch = st.checkbox("🏆 Activer le Mode Challenge")
 
     if st.button("🚀 Commencer le Quiz", type="primary"):
         if nom and prenom and pseudo:
-            # ON ENREGISTRE BIEN LES 3 VARIABLES ICI
             st.session_state['user_nom'] = nom
             st.session_state['user_prenom'] = prenom
             st.session_state['user_pseudo'] = pseudo
-            
             init_new_game(choix_cat, mode_ch)
             st.rerun()
         else:
             st.warning("Veuillez remplir Nom, Prénom et Pseudo.")
-
 else:
-    # Écran de jeu
     if not st.session_state['game_over']:
         idx = st.session_state['current_q_index']
         q_data = st.session_state['quiz_data'][idx]
@@ -188,9 +166,8 @@ else:
                     st.session_state['user_reponse'] = rep
                     st.rerun()
         else:
-            # Affichage résultat selon mode
             if st.session_state['is_challenge']:
-                st.info("🎯 Réponse enregistrée. (Mode Challenge : correction masquée)")
+                st.info("🎯 Réponse enregistrée.")
             else:
                 sol_f = fin.fmt(q_data['sol'], q_data['unit'])
                 if st.session_state['last_result'] == "correct":
@@ -207,33 +184,19 @@ else:
                     st.session_state['game_over'] = True
                     st.rerun()
     else:
-        # ÉCRAN DE FIN
         st.balloons()
         duree = (time.time() - st.session_state['start_time']) / 60
         st.markdown(f"## Terminé, {st.session_state['user_pseudo']} !")
         st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
         
-        # Conditions d'enregistrement
         if st.session_state['is_challenge']:
-            if duree >= 1:
-                # On enregistre et on montre le classement
+            if duree >= 1: # Seuil réglé à 1 min pour vos tests, remettez 10 après
                 enregistrer_et_afficher_leaderboard()
             else:
-                st.warning(f"⚠️ Temps : {int(duree)} min. Minimum 10 min requis pour le Leaderboard.")
+                st.warning(f"⚠️ Temps insuffisant ({int(duree)} min) pour le classement.")
         else:
-            st.info("💡 Mode Entraînement : le score n'est pas enregistré.")
+            st.info("💡 Mode Entraînement : score non enregistré.")
 
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
-
-
-
-
-
-
-
-
-
-
-
