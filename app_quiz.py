@@ -192,7 +192,7 @@ else:
         
         # Conditions d'enregistrement
         if st.session_state['is_challenge']:
-            if duree >= 10:
+            if duree >= 1:
                 # On enregistre et on montre le classement
                 enregistrer_et_afficher_leaderboard()
             else:
@@ -203,4 +203,5 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
