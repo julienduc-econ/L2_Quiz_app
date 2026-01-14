@@ -6,67 +6,50 @@ from datetime import datetime
 import finance_formulas as fin
 from streamlit_gsheets import GSheetsConnection
 
-# --- CONFIGURATION PAGE & CSS ---
+# --- CONFIGURATION PAGE ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- CSS PERSONNALISÉ (STYLE ONGLET + BOUTONS) ---
+# --- CSS "BLINDÉ" POUR FORCER LES COULEURS ---
 st.markdown("""
     <style>
-        /* 1. STYLE DES ONGLETS (TABS) PLUS GROS */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
-            border-bottom: 1px solid #e0e0e0;
-            padding-bottom: 5px;
+        /* 1. STYLE DES ONGLETS (TABS) */
+        
+        /* Cible tous les boutons d'onglets par défaut (INACTIFS) */
+        button[data-baseweb="tab"] {
+            background-color: #e0e0ef !important; /* GRIS PLUS FONCÉ pour bien voir la différence */
+            border: 1px solid #d0d0d0 !important;
+            color: #555 !important;               /* Texte gris foncé */
+            font-size: 18px !important;           /* Texte plus gros */
+            padding: 15px 30px !important;        /* Onglet plus large et haut */
+            border-radius: 5px 5px 0px 0px !important;
+            margin-right: 5px !important;         /* Petit espace entre les onglets */
         }
 
-        .stTabs [data-baseweb="tab"] {
-            height: auto;
-            white-space: nowrap;
-            background-color: #f0f2f6; 
-            border-radius: 8px 8px 0px 0px;
-            padding: 15px 40px;       /* <-- PLUS GROS (Largeur/Hauteur) */
-            font-size: 18px;          /* <-- TEXTE PLUS GROS */
-            color: #555;
-            font-weight: 600;
-            border: 1px solid transparent;
+        /* Cible uniquement l'onglet SÉLECTIONNÉ (ACTIF) */
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: #ffffff !important; /* BLANC PUR */
+            color: #000000 !important;            /* Texte NOIR */
+            border-top: 4px solid #ff4b4b !important; /* Barre rouge au dessus */
+            border-bottom: 1px solid #ffffff !important; /* On efface la bordure du bas pour lier au contenu */
+            font-weight: bold !important;
         }
 
-        .stTabs [aria-selected="true"] {
-            background-color: #ffffff !important;
-            color: #000 !important;
-            border-top: 4px solid #ff4b4b; /* Bordure rouge plus épaisse */
-            border-left: 1px solid #e0e0e0;
-            border-right: 1px solid #e0e0e0;
-            border-bottom: 1px solid white;
-        }
-
-        /* 2. STYLE DES BOUTONS (GRIS FONCÉ & BLANC) */
-        /* Cible tous les boutons Streamlit */
+        /* 2. STYLE DES BOUTONS CLASSIQUES (GRIS FONCÉ & BLANC) */
         div.stButton > button {
-            background-color: #262730 !important; /* Gris Foncé (Style Header) */
-            color: white !important;              /* Texte Blanc */
+            background-color: #262730 !important;
+            color: white !important;
             border: none;
             border-radius: 6px;
             font-size: 16px;
             padding: 10px 24px;
-            transition: all 0.3s ease;
         }
         
-        /* Effet au survol de la souris */
         div.stButton > button:hover {
-            background-color: #3e404b !important; /* Un peu plus clair */
+            background-color: #3e404b !important;
             color: white !important;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        
-        /* Pour le bouton "Valider" dans le formulaire qui est parfois spécifique */
-        div.stFormSubmitButton > button {
-            background-color: #262730 !important;
-            color: white !important;
-            border: none;
         }
 
-        /* Autres ajustements */
+        /* Masquer le pied de page Streamlit */
         footer {visibility: hidden;}
         .block-container {padding-top: 2rem;}
     </style>
@@ -152,14 +135,12 @@ if 'game_started' not in st.session_state:
     st.session_state['game_started'] = False
 
 # ==============================================================================
-# STRUCTURE PRINCIPALE AVEC ONGLETS
+# STRUCTURE PRINCIPALE
 # ==============================================================================
 
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
-# ------------------------------------------------------------------------------
-# ONGLET 1 : LE JEU
-# ------------------------------------------------------------------------------
+# --- ONGLET 1 : JEU ---
 with tab_jeu:
     if not st.session_state['game_started']:
         st.markdown("## 🎓 Quiz de Mathématiques Financières")
@@ -229,7 +210,7 @@ with tab_jeu:
             st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
             
             if st.session_state['is_challenge']:
-                if duree >= 0: # TODO: Remettre le timer réel (ex: 1 min) en prod
+                if duree >= 0: # TODO: Remettre le timer réel
                     enregistrer_score()
                     st.info("👉 Allez voir l'onglet 'Classement Général' pour voir votre moyenne !")
                 else:
@@ -239,9 +220,7 @@ with tab_jeu:
                 st.session_state['game_started'] = False
                 st.rerun()
 
-# ------------------------------------------------------------------------------
-# ONGLET 2 : LE CLASSEMENT GÉNÉRAL (AVG)
-# ------------------------------------------------------------------------------
+# --- ONGLET 2 : LEADERBOARD ---
 with tab_leaderboard:
     st.markdown("## 🏆 Classement par Moyenne")
     st.write("Ce classement calcule la moyenne de vos scores pour la catégorie sélectionnée.")
