@@ -118,6 +118,7 @@ def generer_question(categorie_choisie):
 
 # --- INITIALISATION ---
 def init_new_game(categorie, challenge_mode):
+    st.session_state['quiz_category'] = categorie
     st.session_state['quiz_data'] = [generer_question(categorie) for _ in range(NB_QUESTIONS)]
     st.session_state['current_q_index'] = 0
     st.session_state['score'] = 0
@@ -217,6 +218,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
