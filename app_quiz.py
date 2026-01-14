@@ -28,20 +28,55 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def enregistrer_et_afficher_leaderboard():
-    st.write("🔄 Connexion...")
-    
     try:
-        # Connexion standard (sans arguments, elle lit tout seule les secrets)
+        # 1. CONFIGURATION
+        # On récupère l'URL pour cibler le bon fichier
+        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+        
+        # Connexion directe (sans artifice de réparation)
         conn = st.connection("gsheets", type=GSheetsConnection)
+
+        # 2. PRÉPARATION DE LA DONNÉE
+        duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
         
-        # Lecture basique (elle cherche la clé "spreadsheet" dans les secrets)
-        df = conn.read()
+        new_row = pd.DataFrame([{
+            "Date": datetime.now().strftime("%d/%m/%Y"),
+            "Nom": st.session_state.get('user_nom', 'Inconnu'),
+            "Prénom": st.session_state.get('user_prenom', 'Inconnu'),
+            "Pseudo": st.session_state.get('user_pseudo', 'Anonyme'),
+            "Score": st.session_state.get('score', 0),
+            "Thème": st.session_state.get('quiz_category', 'Tout'),
+            "Temps": round(duree_min, 1)
+        }])
+
+        # 3. LECTURE & FUSION
+        try:
+            existing_data = conn.read(spreadsheet=url)
+        except:
+            existing_data = pd.DataFrame()
+
+        if existing_data is None or existing_data.empty:
+            updated_df = new_row
+        else:
+            existing_data = existing_data.dropna(how='all')
+            updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        st.success("✅ Lecture réussie !")
-        st.dataframe(df)
+        # 4. ECRITURE
+        conn.update(spreadsheet=url, data=updated_df)
+        st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, ton score est enregistré !")
+
+        # 5. AFFICHAGE DU TOP 10
+        st.markdown("### 🥇 Classement (Top 10)")
+        leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
+        leaderboard = (leaderboard
+            .sort_values(by=["Score", "Temps"], ascending=[False, True])
+            .drop_duplicates(subset=["Pseudo"])
+            .head(10))
+        leaderboard.index = range(1, len(leaderboard) + 1)
+        st.table(leaderboard)
 
     except Exception as e:
-        st.error(f"Erreur : {e}")
+        st.error(f"Une erreur est survenue : {e}")
         
 # --- CONSTANTES ---
 NB_QUESTIONS = 2
@@ -163,6 +198,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
