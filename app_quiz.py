@@ -77,7 +77,7 @@ def enregistrer_et_afficher_leaderboard():
         st.write(f"Erreur technique : {e}")
 
 
-NB_QUESTIONS = 5
+NB_QUESTIONS = 2
 
 # --- LOGIQUE DE GÉNÉRATION ---
 def generer_question(categorie_choisie):
@@ -218,6 +218,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
