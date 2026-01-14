@@ -28,53 +28,56 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def enregistrer_et_afficher_leaderboard():
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    
-    # 1. Préparation de la nouvelle ligne
-    duree_min = (time.time() - st.session_state['start_time']) / 60
-    
-    new_row = pd.DataFrame([{
-        "Date": datetime.now().strftime("%d/%m/%Y"),
-        "Nom": st.session_state.get('user_nom', 'Inconnu'),
-        "Prénom": st.session_state.get('user_prenom', 'Inconnu'),
-        "Pseudo": st.session_state.get('user_pseudo', 'Anonyme'),
-        "Score": st.session_state['score'],
-        "Thème": st.session_state['quiz_category'],
-        "Temps": round(duree_min, 1)
-    }])
-
-    # 2. Lecture et mise à jour sécurisée
     try:
-        existing_data = conn.read()
+        # 1. Connexion via le Service Account configuré dans les secrets
+        conn = st.connection("gsheets", type=GSheetsConnection)
         
+        # 2. Préparation de la nouvelle ligne
+        duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
+        
+        new_row = pd.DataFrame([{
+            "Date": datetime.now().strftime("%d/%m/%Y"),
+            "Nom": st.session_state.get('user_nom', 'Inconnu'),
+            "Prénom": st.session_state.get('user_prenom', 'Inconnu'),
+            "Pseudo": st.session_state.get('user_pseudo', 'Anonyme'),
+            "Score": st.session_state.get('score', 0),
+            "Thème": st.session_state.get('quiz_category', 'Tout'),
+            "Temps": round(duree_min, 1)
+        }])
+
+        # 3. Lecture des données existantes
+        try:
+            existing_data = conn.read()
+        except:
+            existing_data = pd.DataFrame()
+
+        # 4. Fusion et mise à jour
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # Mise à jour du Google Sheet
+        # L'écriture automatique (invisible pour l'étudiant)
         conn.update(data=updated_df)
-        st.success("✅ Score enregistré dans le classement !")
+        st.success("🏆 Votre score a été enregistré automatiquement au classement !")
 
-        # 3. Affichage du Leaderboard Public (Top 10)
+        # 5. Affichage du Top 10
         st.markdown("---")
-        st.markdown("### 🏆 Leaderboard (Top 10)")
+        st.markdown("### 🥇 Top 10 des Meilleurs Scores")
         
-        if not updated_df.empty:
-            # Sélection des colonnes publiques
-            leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]]
-            # Tri et suppression des doublons pour ne garder que le meilleur score par pseudo
-            leaderboard = (leaderboard
-                .sort_values(by=["Score", "Temps"], ascending=[False, True])
-                .drop_duplicates(subset=["Pseudo"])
-                .head(10))
-            
-            st.table(leaderboard)
-            
+        # On ne garde que les infos publiques
+        leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
+        leaderboard = (leaderboard
+            .sort_values(by=["Score", "Temps"], ascending=[False, True])
+            .drop_duplicates(subset=["Pseudo"])
+            .head(10))
+        
+        # On remet l'index pour que ça affiche 1, 2, 3...
+        leaderboard.index = range(1, len(leaderboard) + 1)
+        st.table(leaderboard)
+
     except Exception as e:
-        st.error("Désolé, impossible de mettre à jour le classement pour le moment.")
-        # Optionnel : décommenter la ligne suivante pour voir l'erreur technique exacte
-        st.write(f"Erreur technique : {e}")
+        st.error(f"Erreur lors de l'accès au classement : {e}")
 
 
 NB_QUESTIONS = 2
@@ -218,6 +221,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
