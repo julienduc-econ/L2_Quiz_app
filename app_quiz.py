@@ -29,21 +29,15 @@ st.markdown("""
 
 def enregistrer_et_afficher_leaderboard():
     try:
-        # 1. RÉCUPÉRATION DES SECRETS (Copie locale)
-        # On transforme les secrets en dictionnaire pour les manipuler
-        creds = st.secrets["connections"]["gsheets"].to_dict()
-        
-        # On retire 'type' pour éviter le conflit avec st.connection(type=GSheetsConnection)
-        creds.pop("type", None)
-        
-        # On renomme 'spreadsheet' en 'url' car c'est ce que GSheetsConnection attend
-        if "spreadsheet" in creds:
-            creds["url"] = creds.pop("spreadsheet")
-        
-        # 2. CONNEXION
-        # On utilise **creds pour envoyer tous les paramètres du dictionnaire
-        conn = st.connection("gsheets", type=GSheetsConnection, **creds)
-        
+        # 1. RÉCUPÉRATION DE L'URL
+        # On va chercher l'URL manuellement dans les secrets
+        # (Comme ça, peu importe si la bibliothèque attend 'url' ou 'spreadsheet', on l'a)
+        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+
+        # 2. CONNEXION SIMPLE
+        # On ne passe AUCUN argument ici. La connexion va lire le fichier secrets toute seule pour l'auth.
+        conn = st.connection("gsheets", type=GSheetsConnection)
+
         # 3. PRÉPARATION DE LA DONNÉE
         duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
         
@@ -57,23 +51,27 @@ def enregistrer_et_afficher_leaderboard():
             "Temps": round(duree_min, 1)
         }])
 
-        # 4. LECTURE ET MISE À JOUR
+        # 4. LECTURE (Avec URL explicite)
         try:
-            existing_data = conn.read()
-        except:
+            # On dit précisément quel fichier lire grâce à l'URL récupérée plus haut
+            existing_data = conn.read(spreadsheet=url)
+        except Exception:
             existing_data = pd.DataFrame()
 
+        # 5. FUSION
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
+            # On nettoie pour éviter les lignes vides
             existing_data = existing_data.dropna(how='all')
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # Envoi au GSheet
-        conn.update(data=updated_df)
+        # 6. ECRITURE (Avec URL explicite)
+        conn.update(spreadsheet=url, data=updated_df)
+        
         st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, score enregistré !")
 
-        # 5. AFFICHAGE DU TOP 10
+        # 7. AFFICHAGE DU CLASSEMENT
         st.markdown("### 🥇 Classement (Top 10)")
         leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
         leaderboard = (leaderboard
@@ -84,9 +82,8 @@ def enregistrer_et_afficher_leaderboard():
         st.table(leaderboard)
 
     except Exception as e:
-        # On garde ce message pour voir s'il reste une dernière petite erreur
         st.error(f"Détail de l'erreur : {e}")
-
+        
 # --- CONSTANTES ---
 NB_QUESTIONS = 2
 
@@ -207,6 +204,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
