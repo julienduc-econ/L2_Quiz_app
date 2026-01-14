@@ -9,40 +9,64 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION PAGE & CSS ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- NOUVEAU CSS CORRIGÉ POUR LES ONGLETS ---
+# --- CSS PERSONNALISÉ (STYLE ONGLET + BOUTONS) ---
 st.markdown("""
     <style>
-        /* Conteneur de la liste des onglets */
+        /* 1. STYLE DES ONGLETS (TABS) PLUS GROS */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 8px; /* Espace entre les onglets */
-            border-bottom: 1px solid #e0e0e0; /* Ligne de démarcation en bas */
-            padding-bottom: 0px;
+            gap: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 5px;
         }
 
-        /* Style par défaut des onglets (inactifs) */
         .stTabs [data-baseweb="tab"] {
-            height: auto; /* Laisse la hauteur s'adapter au texte */
-            white-space: nowrap; /* Empêche le texte de passer à la ligne */
-            background-color: #f8f9fa; /* Gris très clair pour se distinguer du fond */
-            border-radius: 8px 8px 0px 0px; /* Arrondi en haut */
-            padding: 12px 20px; /* Espace intérieur confortable */
-            color: #666; /* Texte un peu moins noir */
-            border: 1px solid transparent; /* Bordure invisible pour l'alignement */
-            font-weight: 500;
+            height: auto;
+            white-space: nowrap;
+            background-color: #f0f2f6; 
+            border-radius: 8px 8px 0px 0px;
+            padding: 15px 40px;       /* <-- PLUS GROS (Largeur/Hauteur) */
+            font-size: 18px;          /* <-- TEXTE PLUS GROS */
+            color: #555;
+            font-weight: 600;
+            border: 1px solid transparent;
         }
 
-        /* Style de l'onglet SÉLECTIONNÉ (Actif) */
         .stTabs [aria-selected="true"] {
-            background-color: #ffffff !important; /* Fond blanc pur pour ressortir */
-            color: #000 !important; /* Texte noir foncé */
-            /* Bordure rouge en haut, grise sur les côtés, et on masque le bas pour lier au contenu */
-            border-top: 3px solid #ff4b4b;
+            background-color: #ffffff !important;
+            color: #000 !important;
+            border-top: 4px solid #ff4b4b; /* Bordure rouge plus épaisse */
             border-left: 1px solid #e0e0e0;
             border-right: 1px solid #e0e0e0;
-            border-bottom: 1px solid white; /* Masque la ligne du conteneur */
+            border-bottom: 1px solid white;
         }
 
-        /* Autres styles */
+        /* 2. STYLE DES BOUTONS (GRIS FONCÉ & BLANC) */
+        /* Cible tous les boutons Streamlit */
+        div.stButton > button {
+            background-color: #262730 !important; /* Gris Foncé (Style Header) */
+            color: white !important;              /* Texte Blanc */
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            padding: 10px 24px;
+            transition: all 0.3s ease;
+        }
+        
+        /* Effet au survol de la souris */
+        div.stButton > button:hover {
+            background-color: #3e404b !important; /* Un peu plus clair */
+            color: white !important;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        
+        /* Pour le bouton "Valider" dans le formulaire qui est parfois spécifique */
+        div.stFormSubmitButton > button {
+            background-color: #262730 !important;
+            color: white !important;
+            border: none;
+        }
+
+        /* Autres ajustements */
         footer {visibility: hidden;}
         .block-container {padding-top: 2rem;}
     </style>
@@ -131,7 +155,6 @@ if 'game_started' not in st.session_state:
 # STRUCTURE PRINCIPALE AVEC ONGLETS
 # ==============================================================================
 
-# CHANGEMENT ICÔNE ICI : 📖 au lieu de 🎮
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
 # ------------------------------------------------------------------------------
@@ -150,7 +173,7 @@ with tab_jeu:
         choix_cat = st.selectbox("Thème", ["Tout", "Capitalisation", "Actualisation", "VAN", "TAEG"])
         mode_ch = st.checkbox("🏆 Activer le Mode Challenge", value=True)
 
-        if st.button("🚀 Commencer", type="primary"):
+        if st.button("🚀 Commencer"):
             if nom and prenom and pseudo:
                 st.session_state['user_nom'] = nom
                 st.session_state['user_prenom'] = prenom
@@ -160,7 +183,6 @@ with tab_jeu:
             else:
                 st.warning("Veuillez remplir Nom, Prénom et Pseudo.")
     else:
-        # PENDANT LE JEU
         if not st.session_state['game_over']:
             idx = st.session_state['current_q_index']
             q_data = st.session_state['quiz_data'][idx]
@@ -201,14 +223,13 @@ with tab_jeu:
                         st.session_state['game_over'] = True
                         st.rerun()
         else:
-            # FIN DU JEU
             st.balloons()
             duree = (time.time() - st.session_state['start_time']) / 60
             st.markdown(f"## Terminé, {st.session_state['user_pseudo']} !")
             st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
             
             if st.session_state['is_challenge']:
-                if duree >= 0: # REMETTRE A 0.5 ou 1 en production
+                if duree >= 0: # TODO: Remettre le timer réel (ex: 1 min) en prod
                     enregistrer_score()
                     st.info("👉 Allez voir l'onglet 'Classement Général' pour voir votre moyenne !")
                 else:
@@ -225,7 +246,6 @@ with tab_leaderboard:
     st.markdown("## 🏆 Classement par Moyenne")
     st.write("Ce classement calcule la moyenne de vos scores pour la catégorie sélectionnée.")
     
-    # 1. Filtre Catégorie
     cat_filter = st.selectbox("Filtrer par catégorie :", ["Tout", "Capitalisation", "Actualisation", "VAN", "TAEG"])
     
     if st.button("🔄 Actualiser le classement"):
@@ -244,7 +264,6 @@ with tab_leaderboard:
                 df_filtered = df
 
             if not df_filtered.empty:
-                # Calcul moyenne
                 stats = df_filtered.groupby("Pseudo").agg(
                     Moyenne_Score=('Score', 'mean'),
                     Nb_Quiz=('Score', 'count'),
