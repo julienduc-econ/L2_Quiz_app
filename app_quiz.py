@@ -4,6 +4,7 @@ import time
 import pandas as pd
 from datetime import datetime
 import finance_formulas as fin
+from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURATION PAGE & CSS ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="expanded")
@@ -25,6 +26,45 @@ st.markdown("""
         <a href="https://julienduc-econ.github.io/L2_MF/" target="_blank">📖 Accéder au cours</a>
     </div>
 """, unsafe_allow_html=True)
+
+def enregistrer_et_afficher_leaderboard():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    
+    # 1. Préparation de la nouvelle ligne
+    duree_min = (time.time() - st.session_state['start_time']) / 60
+    
+    new_row = pd.DataFrame([{
+        "Date": datetime.now().strftime("%d/%m/%Y"),
+        "Nom": st.session_state['user_nom'],
+        "Prénom": st.session_state['user_prenom'],
+        "Pseudo": st.session_state['user_pseudo'],
+        "Score": st.session_state['score'],
+        "Thème": st.session_state['quiz_category'],
+        "Temps": round(duree_min, 1)
+    }])
+
+    # 2. Lecture et mise à jour
+    try:
+        existing_data = conn.read()
+        updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+        conn.update(data=updated_df)
+        st.success("✅ Score enregistré dans la base de données !")
+    except Exception as e:
+        st.error("Erreur lors de l'enregistrement. Vérifiez les accès du GSheet.")
+
+    # 3. Affichage du Leaderboard Public (Top 10)
+    st.markdown("### 🏆 Leaderboard (Top 10)")
+    if not updated_df.empty:
+        # On ne montre que Pseudo, Score et Temps pour le public
+        leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]]
+        leaderboard = (leaderboard
+            .sort_values(by=["Score", "Temps"], ascending=[False, True])
+            .drop_duplicates(subset=["Pseudo"])
+            .head(10))
+        
+        st.table(leaderboard)
+
+
 
 NB_QUESTIONS = 20
 
@@ -144,18 +184,23 @@ else:
                     st.session_state['game_over'] = True
                     st.rerun()
     else:
-        # Écran de fin
+        # ÉCRAN DE FIN
         st.balloons()
         duree = (time.time() - st.session_state['start_time']) / 60
-        st.markdown(f"## Terminé ! Score : {st.session_state['score']} / {NB_QUESTIONS}")
-        st.write(f"⏱ Temps total : {int(duree)} minutes")
+        st.markdown(f"## Terminé, {st.session_state['user_pseudo']} !")
+        st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
+        
+        # Conditions d'enregistrement
+        if st.session_state['is_challenge']:
+            if duree >= 10:
+                # On enregistre et on montre le classement
+                enregistrer_et_afficher_leaderboard()
+            else:
+                st.warning(f"⚠️ Temps : {int(duree)} min. Minimum 10 min requis pour le Leaderboard.")
+        else:
+            st.info("💡 Mode Entraînement : le score n'est pas enregistré.")
 
-        if st.session_state['is_challenge'] and duree >= 10:
-            st.success("🏆 Score éligible pour le Leaderboard !")
-            # Ici code de connexion GSheets pour enregistrer st.session_state['user_pseudo']
-        elif st.session_state['is_challenge']:
-            st.warning("⚠️ Temps inférieur à 10 min : score non classé.")
-
-        if st.button("Retour à l'accueil"):
+        if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
