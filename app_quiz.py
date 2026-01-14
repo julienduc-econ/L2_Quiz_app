@@ -43,30 +43,38 @@ def enregistrer_et_afficher_leaderboard():
         "Temps": round(duree_min, 1)
     }])
 
-    # 2. Lecture sécurisée
+    # 2. Lecture et mise à jour sécurisée
     try:
         existing_data = conn.read()
-        # Si le fichier est vide ou n'a pas les bonnes colonnes
+        
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
+        # Mise à jour du Google Sheet
         conn.update(data=updated_df)
-        st.success("✅ Score enregistré !")
+        st.success("✅ Score enregistré dans le classement !")
 
-    # 3. Affichage du Leaderboard Public (Top 10)
-    st.markdown("### 🏆 Leaderboard (Top 10)")
-    if not updated_df.empty:
-        # On ne montre que Pseudo, Score et Temps pour le public
-        leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]]
-        leaderboard = (leaderboard
-            .sort_values(by=["Score", "Temps"], ascending=[False, True])
-            .drop_duplicates(subset=["Pseudo"])
-            .head(10))
+        # 3. Affichage du Leaderboard Public (Top 10)
+        st.markdown("---")
+        st.markdown("### 🏆 Leaderboard (Top 10)")
         
-        st.table(leaderboard)
-
+        if not updated_df.empty:
+            # Sélection des colonnes publiques
+            leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]]
+            # Tri et suppression des doublons pour ne garder que le meilleur score par pseudo
+            leaderboard = (leaderboard
+                .sort_values(by=["Score", "Temps"], ascending=[False, True])
+                .drop_duplicates(subset=["Pseudo"])
+                .head(10))
+            
+            st.table(leaderboard)
+            
+    except Exception as e:
+        st.error("Désolé, impossible de mettre à jour le classement pour le moment.")
+        # Optionnel : décommenter la ligne suivante pour voir l'erreur technique exacte
+        # st.write(f"Erreur technique : {e}")
 
 
 NB_QUESTIONS = 5
@@ -209,6 +217,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
