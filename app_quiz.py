@@ -134,8 +134,11 @@ if not st.session_state['game_started']:
 
     if st.button("🚀 Commencer le Quiz", type="primary"):
         if nom and prenom and pseudo:
-            st.session_state['user_real_name'] = f"{prenom} {nom}"
+            # ON ENREGISTRE BIEN LES 3 VARIABLES ICI
+            st.session_state['user_nom'] = nom
+            st.session_state['user_prenom'] = prenom
             st.session_state['user_pseudo'] = pseudo
+            
             init_new_game(choix_cat, mode_ch)
             st.rerun()
         else:
@@ -203,6 +206,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
