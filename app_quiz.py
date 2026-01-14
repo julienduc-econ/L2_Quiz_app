@@ -202,7 +202,7 @@ else:
         st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
         
         if st.session_state['is_challenge']:
-            if duree >= 1: # Seuil réglé à 1 min pour vos tests, remettez 10 après
+            if duree >= 0: # Seuil réglé à 1 min pour vos tests, remettez 10 après
                 enregistrer_et_afficher_leaderboard()
             else:
                 st.warning(f"⚠️ Temps insuffisant ({int(duree)} min) pour le classement.")
@@ -212,5 +212,6 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
