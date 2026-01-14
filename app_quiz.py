@@ -9,71 +9,76 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION PAGE ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- CSS AVANCÉ POUR POSITIONNEMENT ET COULEURS ---
+# --- CSS INTELLIGENT (S'ADAPTE AU DARK MODE) ---
 st.markdown("""
     <style>
         /* 1. REMONTER LE CONTENU TOUT EN HAUT */
         .block-container {
-            padding-top: 1rem !important; /* Réduit la marge haute au minimum (défaut ~5rem) */
+            padding-top: 1rem !important;
             padding-bottom: 5rem;
         }
 
-        /* 2. BARRE D'ONGLETS GRISE (Comme un menu) */
+        /* 2. CONTENEUR DES ONGLETS */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
-            background-color: #f0f2f6; /* FOND GRIS DERRIÈRE LES ONGLETS */
-            padding: 10px 10px 0px 10px;
-            border-radius: 10px 10px 0px 0px;
-            border-bottom: 2px solid #d0d0d0;
+            gap: 8px;
+            /* On ne met pas de couleur de fond forcée, on laisse le noir du thème */
+            border-bottom: 1px solid #444; /* Ligne discrète */
+            padding-bottom: 0px;
         }
 
-        /* 3. ONGLETS INACTIFS (Plus foncés pour contraster) */
+        /* 3. ONGLETS INACTIFS (FOND QUI SE FOND DANS LE DÉCOR) */
         .stTabs [data-baseweb="tab"] {
             height: auto;
-            background-color: #dbe0ea; /* GRIS PLUS SOUTENU */
-            border: 1px solid #ccc;
-            border-bottom: none;
-            border-radius: 8px 8px 0px 0px;
-            padding: 10px 25px;
+            /* Utilise la couleur secondaire du thème (souvent un gris très sombre en dark mode) */
+            background-color: var(--secondary-background-color) !important; 
+            color: var(--text-color) !important; /* Couleur du texte automatique */
+            border: 1px solid transparent;
+            border-radius: 6px 6px 0px 0px;
+            padding: 12px 25px;
             font-size: 18px;
-            color: #555;
             font-weight: 600;
+            opacity: 0.7; /* Légèrement transparent pour qu'ils soient discrets */
         }
 
-        /* 4. ONGLET ACTIF (Blanc pur qui ressort) */
+        /* 4. ONGLET ACTIF (SELECTIONNÉ) */
         .stTabs [aria-selected="true"] {
-            background-color: #ffffff !important;
-            color: #000 !important;
-            border-top: 3px solid #ff4b4b !important; /* Ligne rouge */
-            border-left: 1px solid #d0d0d0 !important;
-            border-right: 1px solid #d0d0d0 !important;
-            border-bottom: 2px solid #ffffff !important; /* Masque la ligne du bas pour fusionner */
-            margin-bottom: -2px; /* Astuce pour chevaucher la bordure */
-            z-index: 1;
+            /* Prend la couleur exacte du fond de page principal */
+            background-color: var(--background-color) !important; 
+            color: var(--text-color) !important;
+            border-top: 3px solid #ff4b4b !important; /* La touche rouge */
+            border-bottom: 1px solid var(--background-color) !important; /* Fusionne avec le contenu */
+            opacity: 1; /* Pleine visibilité */
         }
 
-        /* 5. BOUTONS GRIS FONCÉ */
+        /* 5. BOUTONS STYLISÉS (Restent gris foncé/propre) */
         div.stButton > button {
             background-color: #262730 !important;
             color: white !important;
-            border: none;
+            border: 1px solid #444;
             border-radius: 6px;
             font-size: 16px;
             padding: 10px 24px;
         }
         div.stButton > button:hover {
-            background-color: #3e404b !important;
+            border-color: #ff4b4b; /* Petit effet rouge au survol */
+            color: #ff4b4b !important;
         }
 
-        /* 6. FOOTER & DIVERS */
+        /* 6. MASQUER LES ÉLÉMENTS PAR DÉFAUT */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        header {visibility: hidden;} /* Cache la barre colorée par défaut de Streamlit */
+        header {visibility: hidden;} 
         
+        /* 7. VOTRE FOOTER */
         .custom-footer {
             position: fixed; left: 0; bottom: 0; width: 100%;
-            background-color: white; color: #555; text-align: center;
-            padding: 10px 0px; font-size: 13px; border-top: 1px solid #eaeaea; z-index: 999;
+            /* Le footer s'adapte aussi : fond secondaire et texte normal */
+            background-color: var(--secondary-background-color); 
+            color: var(--text-color); 
+            text-align: center;
+            padding: 10px 0px; font-size: 13px; 
+            border-top: 1px solid #444; 
+            z-index: 999;
         }
     </style>
 
@@ -166,12 +171,11 @@ if 'game_started' not in st.session_state:
 # STRUCTURE PRINCIPALE
 # ==============================================================================
 
-# Note : Les onglets seront maintenant tout en haut grâce au padding-top: 1rem
+# Note : Les onglets seront maintenant tout en haut
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
 # --- ONGLET 1 : JEU ---
 with tab_jeu:
-    # On ajoute un espace pour ne pas que le titre colle trop aux onglets
     st.markdown("<br>", unsafe_allow_html=True) 
     
     if not st.session_state['game_started']:
