@@ -9,26 +9,54 @@ from streamlit_gsheets import GSheetsConnection
 # --- CONFIGURATION PAGE & CSS ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
+# --- NOUVEAU CSS CORRIGÉ POUR LES ONGLETS ---
 st.markdown("""
     <style>
-        .stTabs [data-baseweb="tab-list"] { gap: 20px; }
-        .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #f0f2f6; border-radius: 4px 4px 0px 0px; gap: 1px; padding-top: 10px; padding-bottom: 10px; }
-        .stTabs [aria-selected="true"] { background-color: #ffffff; border-bottom: 2px solid #ff4b4b; }
+        /* Conteneur de la liste des onglets */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px; /* Espace entre les onglets */
+            border-bottom: 1px solid #e0e0e0; /* Ligne de démarcation en bas */
+            padding-bottom: 0px;
+        }
+
+        /* Style par défaut des onglets (inactifs) */
+        .stTabs [data-baseweb="tab"] {
+            height: auto; /* Laisse la hauteur s'adapter au texte */
+            white-space: nowrap; /* Empêche le texte de passer à la ligne */
+            background-color: #f8f9fa; /* Gris très clair pour se distinguer du fond */
+            border-radius: 8px 8px 0px 0px; /* Arrondi en haut */
+            padding: 12px 20px; /* Espace intérieur confortable */
+            color: #666; /* Texte un peu moins noir */
+            border: 1px solid transparent; /* Bordure invisible pour l'alignement */
+            font-weight: 500;
+        }
+
+        /* Style de l'onglet SÉLECTIONNÉ (Actif) */
+        .stTabs [aria-selected="true"] {
+            background-color: #ffffff !important; /* Fond blanc pur pour ressortir */
+            color: #000 !important; /* Texte noir foncé */
+            /* Bordure rouge en haut, grise sur les côtés, et on masque le bas pour lier au contenu */
+            border-top: 3px solid #ff4b4b;
+            border-left: 1px solid #e0e0e0;
+            border-right: 1px solid #e0e0e0;
+            border-bottom: 1px solid white; /* Masque la ligne du conteneur */
+        }
+
+        /* Autres styles */
         footer {visibility: hidden;}
         .block-container {padding-top: 2rem;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- FONCTION DE SAUVEGARDE (Utilisée à la fin du jeu) ---
+
+# --- FONCTION DE SAUVEGARDE ---
 def enregistrer_score():
     try:
         url = st.secrets["connections"]["gsheets"]["spreadsheet"]
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # Calcul temps
         duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
         
-        # Nouvelle ligne
         new_row = pd.DataFrame([{
             "Date": datetime.now().strftime("%d/%m/%Y"),
             "Nom": st.session_state.get('user_nom', 'Inconnu'),
@@ -39,26 +67,21 @@ def enregistrer_score():
             "Temps": round(duree_min, 1)
         }])
 
-        # Lecture avec ttl=0 pour avoir les données fraîches
         try:
             existing_data = conn.read(spreadsheet=url, ttl=0)
         except:
             existing_data = pd.DataFrame()
 
-        # Fusion
         if existing_data is None or existing_data.empty:
             updated_df = new_row
         else:
             existing_data = existing_data.dropna(how='all')
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # Ecriture
         conn.update(spreadsheet=url, data=updated_df)
-        st.cache_data.clear() # On vide le cache pour l'onglet leaderboard
-        
+        st.cache_data.clear()
         st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, ton score est enregistré !")
-        
-        return updated_df # On retourne les données pour afficher un petit aperçu si besoin
+        return updated_df
 
     except Exception as e:
         st.error(f"Erreur de sauvegarde : {e}")
@@ -88,7 +111,6 @@ def generer_question(categorie_choisie):
         enonce = f"Valeur acquise de **{fin.fmt(K)}** à **{r}%** pendant **{txt_duree}** ?"
         return {"cat": f"Capitalisation ({mode})", "txt": enonce, "sol": sol, "unit": "€"}
     else:
-        # Placeholder pour les autres catégories si pas encore implémentées
         return {"cat": "Général", "txt": "Question de test (Logique à compléter)", "sol": 0, "unit": "€"}
 
 def init_new_game(categorie, challenge_mode):
@@ -109,7 +131,8 @@ if 'game_started' not in st.session_state:
 # STRUCTURE PRINCIPALE AVEC ONGLETS
 # ==============================================================================
 
-tab_jeu, tab_leaderboard = st.tabs(["🎮 S'exercer", "🏆 Classement Général"])
+# CHANGEMENT ICÔNE ICI : 📖 au lieu de 🎮
+tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
 # ------------------------------------------------------------------------------
 # ONGLET 1 : LE JEU
@@ -210,36 +233,28 @@ with tab_leaderboard:
         st.rerun()
 
     try:
-        # 2. Lecture des données
         conn = st.connection("gsheets", type=GSheetsConnection)
         url = st.secrets["connections"]["gsheets"]["spreadsheet"]
         df = conn.read(spreadsheet=url, ttl=0)
         
         if not df.empty:
-            # 3. Filtrage
             if cat_filter != "Tout":
-                # On filtre les lignes qui correspondent au thème
                 df_filtered = df[df["Thème"] == cat_filter]
             else:
                 df_filtered = df
 
             if not df_filtered.empty:
-                # 4. Calcul de la MOYENNE par Pseudo
-                # On groupe par Pseudo et on calcule la moyenne du Score et le nombre de tentatives
+                # Calcul moyenne
                 stats = df_filtered.groupby("Pseudo").agg(
                     Moyenne_Score=('Score', 'mean'),
                     Nb_Quiz=('Score', 'count'),
                     Meilleur_Temps=('Temps', 'min')
                 ).reset_index()
 
-                # 5. Tri (Meilleure moyenne d'abord)
                 stats = stats.sort_values(by=["Moyenne_Score", "Nb_Quiz"], ascending=[False, False])
-                
-                # 6. Mise en forme
                 stats["Moyenne_Score"] = stats["Moyenne_Score"].round(2)
                 stats.index = range(1, len(stats) + 1)
                 
-                # Affichage
                 st.dataframe(
                     stats, 
                     column_config={
@@ -248,7 +263,7 @@ with tab_leaderboard:
                             help="Moyenne des scores obtenus",
                             format="%.2f",
                             min_value=0,
-                            max_value=NB_QUESTIONS # Barre de progression basée sur le max possible
+                            max_value=NB_QUESTIONS
                         ),
                         "Nb_Quiz": st.column_config.NumberColumn("Parties Jouées"),
                         "Meilleur_Temps": st.column_config.NumberColumn("Record (min)", format="%.1f")
@@ -262,4 +277,3 @@ with tab_leaderboard:
 
     except Exception as e:
         st.error("Impossible de charger le classement pour le moment.")
-        # st.error(e) # Décommenter pour debug
