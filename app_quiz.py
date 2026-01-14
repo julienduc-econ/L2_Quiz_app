@@ -66,7 +66,7 @@ def enregistrer_et_afficher_leaderboard():
 
 
 
-NB_QUESTIONS = 20
+NB_QUESTIONS = 5
 
 # --- LOGIQUE DE GÉNÉRATION ---
 def generer_question(categorie_choisie):
@@ -203,5 +203,6 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
