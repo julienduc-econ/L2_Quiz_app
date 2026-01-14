@@ -29,37 +29,31 @@ st.markdown("""
 
 def enregistrer_et_afficher_leaderboard():
     try:
-        # 1. RÉCUPÉRATION ET NETTOYAGE DES SECRETS
+        # 1. RÉCUPÉRATION DES SECRETS (Copie locale)
+        # On transforme les secrets en dictionnaire pour les manipuler
         creds = st.secrets["connections"]["gsheets"].to_dict()
         
-        # On extrait le type pour éviter le conflit "multiple values for type"
-        # car on passe déjà GSheetsConnection en premier argument
-        creds_type = creds.pop("type", None) 
+        # On retire 'type' pour éviter le conflit avec st.connection(type=GSheetsConnection)
+        creds.pop("type", None)
         
-        # On répare la clé si nécessaire
-        if "private_key" in creds:
-            creds["private_key"] = creds["private_key"].replace("\\n", "\n")
+        # On renomme 'spreadsheet' en 'url' car c'est ce que GSheetsConnection attend
+        if "spreadsheet" in creds:
+            creds["url"] = creds.pop("spreadsheet")
         
-        # 2. CONNEXION (Maintenant sans conflit de 'type')
+        # 2. CONNEXION
+        # On utilise **creds pour envoyer tous les paramètres du dictionnaire
         conn = st.connection("gsheets", type=GSheetsConnection, **creds)
         
-        # 3. PRÉPARATION DES DONNÉES
-        nom = st.session_state.get('user_nom', 'Inconnu')
-        prenom = st.session_state.get('user_prenom', 'Inconnu')
-        pseudo = st.session_state.get('user_pseudo', 'Anonyme')
-        score = st.session_state.get('score', 0)
-        theme = st.session_state.get('quiz_category', 'Tout')
+        # 3. PRÉPARATION DE LA DONNÉE
+        duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
         
-        start_time = st.session_state.get('start_time', time.time())
-        duree_min = (time.time() - start_time) / 60
-
         new_row = pd.DataFrame([{
             "Date": datetime.now().strftime("%d/%m/%Y"),
-            "Nom": nom,
-            "Prénom": prenom,
-            "Pseudo": pseudo,
-            "Score": score,
-            "Thème": theme,
+            "Nom": st.session_state.get('user_nom', 'Inconnu'),
+            "Prénom": st.session_state.get('user_prenom', 'Inconnu'),
+            "Pseudo": st.session_state.get('user_pseudo', 'Anonyme'),
+            "Score": st.session_state.get('score', 0),
+            "Thème": st.session_state.get('quiz_category', 'Tout'),
             "Temps": round(duree_min, 1)
         }])
 
@@ -75,12 +69,12 @@ def enregistrer_et_afficher_leaderboard():
             existing_data = existing_data.dropna(how='all')
             updated_df = pd.concat([existing_data, new_row], ignore_index=True)
         
-        # ENREGISTREMENT
+        # Envoi au GSheet
         conn.update(data=updated_df)
-        st.success(f"🏆 Bravo {pseudo}, ton score a été enregistré !")
+        st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, score enregistré !")
 
-        # 5. AFFICHAGE DU CLASSEMENT
-        st.markdown("### 🥇 Top 10")
+        # 5. AFFICHAGE DU TOP 10
+        st.markdown("### 🥇 Classement (Top 10)")
         leaderboard = updated_df[["Pseudo", "Score", "Temps", "Thème"]].copy()
         leaderboard = (leaderboard
             .sort_values(by=["Score", "Temps"], ascending=[False, True])
@@ -90,6 +84,7 @@ def enregistrer_et_afficher_leaderboard():
         st.table(leaderboard)
 
     except Exception as e:
+        # On garde ce message pour voir s'il reste une dernière petite erreur
         st.error(f"Détail de l'erreur : {e}")
 
 # --- CONSTANTES ---
@@ -212,6 +207,7 @@ else:
         if st.button("🔄 Recommencer"):
             st.session_state['game_started'] = False
             st.rerun()
+
 
 
 
