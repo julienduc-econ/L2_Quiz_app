@@ -9,8 +9,7 @@ from streamlit_gsheets import GSheetsConnection
 # --- 1. CONFIGURATION PAGE ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. INITIALISATION DES VARIABLES (LE FIX EST ICI) ---
-# On doit définir ces variables AVANT de créer l'interface
+# --- 2. INITIALISATION DES VARIABLES ---
 if 'game_started' not in st.session_state:
     st.session_state['game_started'] = False
 
@@ -53,7 +52,6 @@ st.markdown("""
 
 def enregistrer_score():
     try:
-        # Connexion standard (La clé est réparée via le format dans secrets.toml)
         url = st.secrets["connections"]["gsheets"]["spreadsheet"]
         conn = st.connection("gsheets", type=GSheetsConnection)
         
@@ -93,14 +91,14 @@ NB_QUESTIONS = 2
 def generer_question(categorie_choisie):
     cat_map = {
         "Capitalisation": ["capitalisation"],
-        "Actualisation": ["actualisation"],
+        "Actualisation": ["actu_simple", "actu_compose"],
         "VAN": ["van_calc"],
         "TAEG": ["taux_equiv", "taux_prop"],
         "Tout": ["capitalisation", "actu_simple", "actu_compose", "van_calc", "taux_equiv", "taux_prop"]
     }
     choix = random.choice(cat_map.get(categorie_choisie, cat_map["Tout"]))
     
-    K = random.choice([1000, 5000, 10000, 20000])
+    K = random.choice([500, 1000, 5000, 10000, 20000, 50000])
     r = round(random.randint(10, 60) * 0.12, 2)
     
     if choix == "capitalisation":
@@ -123,7 +121,6 @@ def init_new_game(categorie, challenge_mode):
     st.session_state['game_started'] = True
     st.session_state['is_challenge'] = challenge_mode
     st.session_state['start_time'] = time.time()
-    # On remet le verrou de sauvegarde à zéro pour la nouvelle partie
     st.session_state['score_saved'] = False
 
 # ==============================================================================
@@ -132,7 +129,6 @@ def init_new_game(categorie, challenge_mode):
 
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
-# --- ONGLET 1 : JEU ---
 with tab_jeu:
     st.markdown("<br>", unsafe_allow_html=True) 
     
@@ -198,34 +194,33 @@ with tab_jeu:
                         st.session_state['game_over'] = True
                         st.rerun()
         else:
-            # FIN DU JEU
             st.balloons()
             duree = (time.time() - st.session_state['start_time']) / 60
             st.markdown(f"## Terminé, {st.session_state['user_pseudo']} !")
             st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
             
             if st.session_state['is_challenge']:
-                # VERIFICATION ANTI-DOUBLON
+                # FIX ANTI-DOUBLON : On vérifie le verrou
                 if not st.session_state.get('score_saved', False):
-                    if duree >= 0: # TODO: Remettre timer réel
-                        enregistrer_score()
-                        st.session_state['score_saved'] = True # On verrouille
+                    if duree >= 0: 
+                        # ON VERROUILLE IMMEDIATEMENT AVANT L'APPEL RÉSEAU
+                        st.session_state['score_saved'] = True 
+                        with st.spinner("Enregistrement du score..."):
+                            enregistrer_score()
                         st.success("✅ Score enregistré avec succès !")
-                        st.info("👉 Allez voir l'onglet 'Classement Général' pour voir votre moyenne !")
                     else:
                         st.warning("Temps trop court pour être validé.")
                 else:
-                    st.info("👉 Votre score a déjà été enregistré.")
+                    st.info("👉 Votre score est déjà bien au chaud dans le classement.")
             
             if st.button("🔄 Recommencer"):
                 st.session_state['game_started'] = False
+                st.session_state['score_saved'] = False
                 st.rerun()
 
-# --- ONGLET 2 : LEADERBOARD ---
 with tab_leaderboard:
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("## 🏆 Classement par Moyenne")
-    st.write("Ce classement calcule la moyenne de vos scores pour la catégorie sélectionnée.")
     
     cat_filter = st.selectbox("Filtrer par catégorie :", ["Tout", "Capitalisation", "Actualisation", "VAN", "TAEG"])
     
@@ -238,7 +233,7 @@ with tab_leaderboard:
         url = st.secrets["connections"]["gsheets"]["spreadsheet"]
         df = conn.read(spreadsheet=url, ttl=0)
         
-        if not df.empty:
+        if df is not None and not df.empty:
             if cat_filter != "Tout":
                 df_filtered = df[df["Thème"] == cat_filter]
             else:
@@ -255,12 +250,12 @@ with tab_leaderboard:
                 stats["Moyenne_Score"] = stats["Moyenne_Score"].round(2)
                 stats.index = range(1, len(stats) + 1)
                 
+                # FIX TAILLE : use_container_width=True pour remplir l'espace
                 st.dataframe(
                     stats, 
                     column_config={
                         "Moyenne_Score": st.column_config.ProgressColumn(
                             "Note Moyenne", 
-                            help="Moyenne des scores obtenus",
                             format="%.2f",
                             min_value=0,
                             max_value=NB_QUESTIONS
@@ -271,9 +266,9 @@ with tab_leaderboard:
                     width='stretch'
                 )
             else:
-                st.info(f"Aucune donnée trouvée pour la catégorie '{cat_filter}'.")
+                st.info(f"Aucune donnée trouvée pour '{cat_filter}'.")
         else:
-            st.warning("Le tableau des scores est vide pour l'instant.")
+            st.warning("Le tableau des scores est vide.")
 
     except Exception as e:
         st.error(f"Impossible de charger le classement : {e}")
