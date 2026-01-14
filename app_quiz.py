@@ -6,92 +6,54 @@ from datetime import datetime
 import finance_formulas as fin
 from streamlit_gsheets import GSheetsConnection
 
-# --- CONFIGURATION PAGE ---
+# --- 1. CONFIGURATION PAGE ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- CSS INTELLIGENT (S'ADAPTE AU DARK MODE) ---
+# --- 2. INITIALISATION DES VARIABLES (LE FIX EST ICI) ---
+# On doit définir ces variables AVANT de créer l'interface
+if 'game_started' not in st.session_state:
+    st.session_state['game_started'] = False
+
+if 'score_saved' not in st.session_state:
+    st.session_state['score_saved'] = False
+
+# --- 3. CSS INTELLIGENT (DARK MODE COMPATIBLE) ---
 st.markdown("""
     <style>
-        /* 1. REMONTER LE CONTENU TOUT EN HAUT */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 5rem;
-        }
-
-        /* 2. CONTENEUR DES ONGLETS */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-            /* On ne met pas de couleur de fond forcée, on laisse le noir du thème */
-            border-bottom: 1px solid #444; /* Ligne discrète */
-            padding-bottom: 0px;
-        }
-
-        /* 3. ONGLETS INACTIFS (FOND QUI SE FOND DANS LE DÉCOR) */
+        .block-container { padding-top: 1rem !important; padding-bottom: 5rem; }
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; border-bottom: 1px solid #444; padding-bottom: 0px; }
         .stTabs [data-baseweb="tab"] {
-            height: auto;
-            /* Utilise la couleur secondaire du thème (souvent un gris très sombre en dark mode) */
-            background-color: var(--secondary-background-color) !important; 
-            color: var(--text-color) !important; /* Couleur du texte automatique */
-            border: 1px solid transparent;
-            border-radius: 6px 6px 0px 0px;
-            padding: 12px 25px;
-            font-size: 18px;
-            font-weight: 600;
-            opacity: 0.7; /* Légèrement transparent pour qu'ils soient discrets */
+            height: auto; background-color: var(--secondary-background-color) !important;
+            color: var(--text-color) !important; border: 1px solid transparent;
+            border-radius: 6px 6px 0px 0px; padding: 12px 25px; font-size: 18px; font-weight: 600; opacity: 0.7;
         }
-
-        /* 4. ONGLET ACTIF (SELECTIONNÉ) */
         .stTabs [aria-selected="true"] {
-            /* Prend la couleur exacte du fond de page principal */
-            background-color: var(--background-color) !important; 
-            color: var(--text-color) !important;
-            border-top: 3px solid #ff4b4b !important; /* La touche rouge */
-            border-bottom: 1px solid var(--background-color) !important; /* Fusionne avec le contenu */
-            opacity: 1; /* Pleine visibilité */
+            background-color: var(--background-color) !important; color: var(--text-color) !important;
+            border-top: 3px solid #ff4b4b !important; border-bottom: 1px solid var(--background-color) !important; opacity: 1;
         }
-
-        /* 5. BOUTONS STYLISÉS (Restent gris foncé/propre) */
         div.stButton > button {
-            background-color: #262730 !important;
-            color: white !important;
-            border: 1px solid #444;
-            border-radius: 6px;
-            font-size: 16px;
-            padding: 10px 24px;
+            background-color: #262730 !important; color: white !important; border: 1px solid #444;
+            border-radius: 6px; font-size: 16px; padding: 10px 24px;
         }
-        div.stButton > button:hover {
-            border-color: #ff4b4b; /* Petit effet rouge au survol */
-            color: #ff4b4b !important;
-        }
-
-        /* 6. MASQUER LES ÉLÉMENTS PAR DÉFAUT */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;} 
-        
-        /* 7. VOTRE FOOTER */
+        div.stButton > button:hover { border-color: #ff4b4b; color: #ff4b4b !important; }
+        #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} 
         .custom-footer {
             position: fixed; left: 0; bottom: 0; width: 100%;
-            /* Le footer s'adapte aussi : fond secondaire et texte normal */
-            background-color: var(--secondary-background-color); 
-            color: var(--text-color); 
-            text-align: center;
-            padding: 10px 0px; font-size: 13px; 
-            border-top: 1px solid #444; 
-            z-index: 999;
+            background-color: var(--secondary-background-color); color: var(--text-color); 
+            text-align: center; padding: 10px 0px; font-size: 13px; border-top: 1px solid #444; z-index: 999;
         }
     </style>
-
     <div class="custom-footer">
         Conçu par <b>Julien Duc</b> - 2026 | 
         <a href="https://julienduc-econ.github.io/L2_MF/" target="_blank" style="text-decoration: none; color: #ff4b4b;">📖 Accéder au cours</a>
     </div>
 """, unsafe_allow_html=True)
 
+# --- 4. FONCTIONS ---
 
-# --- FONCTION DE SAUVEGARDE ---
 def enregistrer_score():
     try:
+        # Connexion standard (La clé est réparée via le format dans secrets.toml)
         url = st.secrets["connections"]["gsheets"]["spreadsheet"]
         conn = st.connection("gsheets", type=GSheetsConnection)
         
@@ -120,20 +82,18 @@ def enregistrer_score():
         
         conn.update(spreadsheet=url, data=updated_df)
         st.cache_data.clear()
-        st.success(f"🏆 Bravo {st.session_state.get('user_pseudo')}, ton score est enregistré !")
         return updated_df
 
     except Exception as e:
         st.error(f"Erreur de sauvegarde : {e}")
         return pd.DataFrame()
 
-# --- CONSTANTES & LOGIQUE JEU ---
 NB_QUESTIONS = 2
 
 def generer_question(categorie_choisie):
     cat_map = {
         "Capitalisation": ["capitalisation"],
-        "Actualisation": ["actu_simple", "actu_compose"],
+        "Actualisation": ["actualisation"],
         "VAN": ["van_calc"],
         "TAEG": ["taux_equiv", "taux_prop"],
         "Tout": ["capitalisation", "actu_simple", "actu_compose", "van_calc", "taux_equiv", "taux_prop"]
@@ -163,15 +123,13 @@ def init_new_game(categorie, challenge_mode):
     st.session_state['game_started'] = True
     st.session_state['is_challenge'] = challenge_mode
     st.session_state['start_time'] = time.time()
-
-if 'game_started' not in st.session_state:
-    st.session_state['game_started'] = False
+    # On remet le verrou de sauvegarde à zéro pour la nouvelle partie
+    st.session_state['score_saved'] = False
 
 # ==============================================================================
 # STRUCTURE PRINCIPALE
 # ==============================================================================
 
-# Note : Les onglets seront maintenant tout en haut
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
 
 # --- ONGLET 1 : JEU ---
@@ -240,17 +198,24 @@ with tab_jeu:
                         st.session_state['game_over'] = True
                         st.rerun()
         else:
+            # FIN DU JEU
             st.balloons()
             duree = (time.time() - st.session_state['start_time']) / 60
             st.markdown(f"## Terminé, {st.session_state['user_pseudo']} !")
             st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
             
             if st.session_state['is_challenge']:
-                if duree >= 0: 
-                    enregistrer_score()
-                    st.info("👉 Allez voir l'onglet 'Classement Général' pour voir votre moyenne !")
+                # VERIFICATION ANTI-DOUBLON
+                if not st.session_state.get('score_saved', False):
+                    if duree >= 0: # TODO: Remettre timer réel
+                        enregistrer_score()
+                        st.session_state['score_saved'] = True # On verrouille
+                        st.success("✅ Score enregistré avec succès !")
+                        st.info("👉 Allez voir l'onglet 'Classement Général' pour voir votre moyenne !")
+                    else:
+                        st.warning("Temps trop court pour être validé.")
                 else:
-                    st.warning("Temps trop court pour être validé.")
+                    st.info("👉 Votre score a déjà été enregistré.")
             
             if st.button("🔄 Recommencer"):
                 st.session_state['game_started'] = False
@@ -303,7 +268,7 @@ with tab_leaderboard:
                         "Nb_Quiz": st.column_config.NumberColumn("Parties Jouées"),
                         "Meilleur_Temps": st.column_config.NumberColumn("Record (min)", format="%.1f")
                     },
-                    use_container_width=True
+                    width='stretch'
                 )
             else:
                 st.info(f"Aucune donnée trouvée pour la catégorie '{cat_filter}'.")
@@ -311,4 +276,4 @@ with tab_leaderboard:
             st.warning("Le tableau des scores est vide pour l'instant.")
 
     except Exception as e:
-        st.error("Impossible de charger le classement pour le moment.")
+        st.error(f"Impossible de charger le classement : {e}")
