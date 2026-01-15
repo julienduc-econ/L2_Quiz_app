@@ -154,12 +154,11 @@ with tab_jeu:
 
 
         choix_cat = st.selectbox("Thème", ["Tout le Programme", "Capitalisation et Actualisation", "Emprunts"])
-        st.info("Le mode **Challenge** enregistre votre score pour le classement général.")
         mode_ch = st.checkbox("🏆 Activer le Mode Challenge (Enregistre votre score)", value=False)
-
+        st.info("Le mode **Challenge** enregistre votre score pour le classement général.")
         pseudo, code_prive = None, None
         if mode_ch:
-            st.info("⚠️ Identifiants requis pour le classement.")
+            #st.info("⚠️ Identifiants requis pour le classement.")
             col1, col2 = st.columns(2)
             pseudo = col1.text_input("Pseudo (public)")
             code_prive = col2.text_input("PIN (secret)", type="password")
