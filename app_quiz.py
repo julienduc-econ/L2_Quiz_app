@@ -4,19 +4,30 @@ import time
 import pandas as pd
 from datetime import datetime
 import finance_formulas as fin
-from streamlit_gsheets import GSheetsConnection
+from supabase import create_client, Client
 
 # --- 1. CONFIGURATION PAGE ---
 st.set_page_config(page_title="Quiz IAE Nantes - Finance", layout="centered", initial_sidebar_state="collapsed")
 
-# --- 2. INITIALISATION DES VARIABLES ---
-if 'game_started' not in st.session_state:
-    st.session_state['game_started'] = False
+# --- 2. CONNEXION SUPABASE ---
+@st.cache_resource
+def get_supabase() -> Client:
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
 
-if 'score_saved' not in st.session_state:
-    st.session_state['score_saved'] = False
+supabase = get_supabase()
 
-# --- 3. CSS INTELLIGENT (DARK MODE COMPATIBLE) ---
+# --- 3. INITIALISATION ---
+# On s'assure que TOUTES les variables existent dès le début
+if 'game_started' not in st.session_state: st.session_state['game_started'] = False
+if 'game_over' not in st.session_state: st.session_state['game_over'] = False
+if 'score_saved' not in st.session_state: st.session_state['score_saved'] = False
+if 'user_pseudo' not in st.session_state: st.session_state['user_pseudo'] = "Invité"
+if 'score' not in st.session_state: st.session_state['score'] = 0
+if 'current_q_index' not in st.session_state: st.session_state['current_q_index'] = 0
+
+# --- CSS ---
 st.markdown("""
     <style>
         .block-container { padding-top: 1rem !important; padding-bottom: 5rem; }
@@ -52,64 +63,58 @@ st.markdown("""
 
 def enregistrer_score():
     try:
-        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        
         duree_min = (time.time() - st.session_state.get('start_time', time.time())) / 60
-        
-        new_row = pd.DataFrame([{
-            "Date": datetime.now().strftime("%d/%m/%Y"),
-            "Nom": st.session_state.get('user_nom', 'Inconnu'),
-            "Prénom": st.session_state.get('user_prenom', 'Inconnu'),
-            "Pseudo": st.session_state.get('user_pseudo', 'Anonyme'),
-            "Score": st.session_state.get('score', 0),
-            "Thème": st.session_state.get('quiz_category', 'Tout'),
-            "Temps": round(duree_min, 1)
-        }])
-
-        try:
-            existing_data = conn.read(spreadsheet=url, ttl=0)
-        except:
-            existing_data = pd.DataFrame()
-
-        if existing_data is None or existing_data.empty:
-            updated_df = new_row
-        else:
-            existing_data = existing_data.dropna(how='all')
-            updated_df = pd.concat([existing_data, new_row], ignore_index=True)
-        
-        conn.update(spreadsheet=url, data=updated_df)
-        st.cache_data.clear()
-        return updated_df
-
+        data = {
+            "pseudo": st.session_state['user_pseudo'],
+            "score": st.session_state['score'],
+            "theme": st.session_state['quiz_category'],
+            "temps": round(duree_min, 1)
+        }
+        supabase.table("scores").insert(data).execute()
+        st.session_state['score_saved'] = True
     except Exception as e:
         st.error(f"Erreur de sauvegarde : {e}")
-        return pd.DataFrame()
 
 NB_QUESTIONS = 2
 
 def generer_question(categorie_choisie):
-    cat_map = {
-        "Capitalisation": ["capitalisation"],
-        "Actualisation": ["actu_simple", "actu_compose"],
-        "VAN": ["van_calc"],
-        "TAEG": ["taux_equiv", "taux_prop"],
-        "Tout": ["capitalisation", "actu_simple", "actu_compose", "van_calc", "taux_equiv", "taux_prop"]
-    }
-    choix = random.choice(cat_map.get(categorie_choisie, cat_map["Tout"]))
-    
+    if categorie_choisie == "Tout le Programme":
+        cat_active = random.choice(["Capitalisation et Actualisation", "Emprunts"])
+    else:
+        cat_active = categorie_choisie
+
     K = random.choice([500, 1000, 5000, 10000, 20000, 50000])
     r = round(random.randint(10, 60) * 0.12, 2)
+    type_unite = random.choice(["jours", "mois", "annees"])
+    valeur_temps = random.randint(30, 700) if type_unite=="jours" else random.randint(2, 24) if type_unite=="mois" else random.randint(1, 10)
+    txt_duree = f"{valeur_temps} {type_unite}"
+
+    if cat_active == "Capitalisation et Actualisation":
+        variante_txt = random.randint(1, 7)
+        if variante_txt in [1, 2, 3]:
+            enonce = f"Valeur acquise de **{fin.fmt(K)}** à **{r}%** pendant **{txt_duree}** ?"
+            sol = round(fin.capitalisation_auto(K, r, valeur_temps, type_unite), 2)
+            unite_rep = "€"
+        elif variante_txt == 5:
+            prix = random.randint(2,30)*10
+            rendements = [random.randint(-5, 10) for _ in range(3)]
+            enonce = f"Action à **{fin.fmt(prix)}**. Rendements : {rendements}. Valeur finale ?"
+            sol = round(fin.action(prix, rendements), 2)
+            unite_rep = "€"
+        else:
+            VF = K * 1.5
+            enonce = f"Taux pour passer de **{fin.fmt(K)}** à **{fin.fmt(VF)}** en **{txt_duree}** ?"
+            sol = round(fin.find_r(K, VF, valeur_temps, type_unite), 2)
+            unite_rep = "%"
+        return {"cat": cat_active, "txt": enonce, "sol": sol, "unit": unite_rep}
     
-    if choix == "capitalisation":
-        type_unite = random.choice(["jours", "mois", "annees"])
-        valeur_temps = random.randint(30, 700) if type_unite=="jours" else random.randint(2, 24) if type_unite=="mois" else random.randint(1, 10)
-        txt_duree = f"{valeur_temps} {type_unite}"
-        sol, mode = fin.capitalisation_auto(K, r, valeur_temps, type_unite)
-        enonce = f"Valeur acquise de **{fin.fmt(K)}** à **{r}%** pendant **{txt_duree}** ?"
-        return {"cat": f"Capitalisation ({mode})", "txt": enonce, "sol": sol, "unit": "€"}
-    else:
-        return {"cat": "Général", "txt": "Question de test (Logique à compléter)", "sol": 0, "unit": "€"}
+    elif cat_active == "Emprunts":
+        variante_txt = random.randint(1, 7)
+        if variante_txt in [1, 2, 3]:
+            enonce = f"Le **{fin.fmt(prix)}**. Rendements : {rendements}. Valeur finale ?"
+
+
+        return {"cat": "Emprunts", "txt": "Question Emprunts à définir", "sol": 0, "unit": "€"}
 
 def init_new_game(categorie, challenge_mode):
     st.session_state['quiz_category'] = categorie
@@ -124,7 +129,7 @@ def init_new_game(categorie, challenge_mode):
     st.session_state['score_saved'] = False
 
 # ==============================================================================
-# STRUCTURE PRINCIPALE
+# STRUCTURE
 # ==============================================================================
 
 tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général"])
@@ -132,143 +137,110 @@ tab_jeu, tab_leaderboard = st.tabs(["📖 S'exercer", "🏆 Classement Général
 with tab_jeu:
     st.markdown("<br>", unsafe_allow_html=True) 
     
+    # --- ETAPE 1 : ACCUEIL ---
     if not st.session_state['game_started']:
         st.markdown("## 🎓 Quiz de Mathématiques Financières")
-        st.info("Le mode Challenge enregistre votre score pour le classement général.")
-        
-        col1, col2, col3 = st.columns(3)
-        nom = col1.text_input("Nom")
-        prenom = col2.text_input("Prénom")
-        pseudo = col3.text_input("Pseudo (sera visible)")
+        st.markdown("""<p style="font-size:20px;">Ce site est dédié au cours de Mathématiques Financières...</p>""", unsafe_allow_html=True)
 
-        choix_cat = st.selectbox("Thème", ["Tout", "Capitalisation", "Actualisation", "VAN", "TAEG"])
-        mode_ch = st.checkbox("🏆 Activer le Mode Challenge", value=True)
+        choix_cat = st.selectbox("Thème", ["Tout le Programme", "Capitalisation et Actualisation", "Emprunts"])
+        mode_ch = st.checkbox("🏆 Activer le Mode Challenge (Enregistre votre score)", value=False)
+
+        pseudo, code_prive = None, None
+        if mode_ch:
+            st.info("⚠️ Identifiants requis pour le classement.")
+            col1, col2 = st.columns(2)
+            pseudo = col1.text_input("Pseudo (public)")
+            code_prive = col2.text_input("Code privé (secret)", type="password")
+
+            user_exists = False
+            nom, prenom = "", ""
+            if pseudo:
+                res = supabase.table("profiles").select("*").eq("pseudo", pseudo).execute()
+                user_exists = len(res.data) > 0
+                if not user_exists:
+                    st.warning("✨ Nouveau profil !")
+                    c1, c2 = st.columns(2)
+                    nom = c1.text_input("Nom de famille")
+                    prenom = c2.text_input("Prénom")
 
         if st.button("🚀 Commencer"):
-            if nom and prenom and pseudo:
-                st.session_state['user_nom'] = nom
-                st.session_state['user_prenom'] = prenom
-                st.session_state['user_pseudo'] = pseudo
+            if mode_ch:
+                if not pseudo or not code_prive:
+                    st.error("Pseudo et Code requis.")
+                else:
+                    if user_exists:
+                        res = supabase.table("profiles").select("*").eq("pseudo", pseudo).execute()
+                        if res.data[0]['code'] == code_prive:
+                            st.session_state['user_pseudo'] = pseudo
+                            init_new_game(choix_cat, mode_ch)
+                            st.rerun()
+                        else: st.error("Code incorrect.")
+                    elif nom and prenom:
+                        supabase.table("profiles").insert({"pseudo": pseudo, "code": code_prive, "nom": nom, "prenom": prenom}).execute()
+                        st.session_state['user_pseudo'] = pseudo
+                        init_new_game(choix_cat, mode_ch)
+                        st.rerun()
+            else:
+                st.session_state['user_pseudo'] = "Invité"
                 init_new_game(choix_cat, mode_ch)
                 st.rerun()
-            else:
-                st.warning("Veuillez remplir Nom, Prénom et Pseudo.")
-    else:
-        if not st.session_state['game_over']:
-            idx = st.session_state['current_q_index']
-            q_data = st.session_state['quiz_data'][idx]
-            
-            st.markdown(f"### Question {idx + 1} / {NB_QUESTIONS}")
-            st.progress((idx) / NB_QUESTIONS)
-            st.write(q_data['txt'])
 
-            if not st.session_state['reponse_validee']:
-                with st.form(key=f"q_{idx}"):
-                    rep = st.number_input(f"Réponse en {q_data['unit']}", format="%.2f", step=0.01)
-                    if st.form_submit_button("Valider"):
-                        st.session_state['reponse_validee'] = True
-                        tol = 0.015 if q_data['unit'] == "%" else 1.0
-                        if abs(rep - q_data['sol']) < tol:
-                            st.session_state['score'] += 1
-                            st.session_state['last_result'] = "correct"
-                        else:
-                            st.session_state['last_result'] = "wrong"
-                        st.session_state['user_reponse'] = rep
-                        st.rerun()
-            else:
-                if st.session_state['is_challenge']:
-                    st.info("🔒 Réponse enregistrée (Mode Challenge)")
-                else:
-                    sol_f = fin.fmt(q_data['sol'], q_data['unit'])
-                    if st.session_state['last_result'] == "correct":
-                        st.success(f"✅ Bravo ! ({sol_f})")
-                    else:
-                        st.error(f"❌ Faux. La réponse était {sol_f}")
+    # --- ETAPE 2 : LE QUIZ ---
+    elif not st.session_state['game_over']:
+        idx = st.session_state['current_q_index']
+        q = st.session_state['quiz_data'][idx]
+        
+        st.markdown(f"### Question {idx + 1} / {NB_QUESTIONS}")
+        st.progress(idx / NB_QUESTIONS)
+        st.write(q['txt'])
 
-                if st.button("Question suivante ➡️"):
-                    if idx < NB_QUESTIONS - 1:
-                        st.session_state['current_q_index'] += 1
-                        st.session_state['reponse_validee'] = False
-                        st.rerun()
+        if not st.session_state['reponse_validee']:
+            with st.form(key=f"q_{idx}"):
+                rep = st.number_input(f"Réponse en {q['unit']}", format="%.2f")
+                if st.form_submit_button("Valider"):
+                    st.session_state['reponse_validee'] = True
+                    if abs(rep - q['sol']) < 0.01:
+                        st.session_state['score'] += 1
+                        st.session_state['last_res'] = "✅ Correct !"
                     else:
-                        st.session_state['game_over'] = True
-                        st.rerun()
+                        st.session_state['last_res'] = f"❌ Faux (La réponse était {q['sol']:.2f} {q['unit']})"
+                    st.rerun()
         else:
-            st.balloons()
-            duree = (time.time() - st.session_state['start_time']) / 60
-            st.markdown(f"## Terminé, {st.session_state['user_pseudo']} !")
-            st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
-            
-            if st.session_state['is_challenge']:
-                # FIX ANTI-DOUBLON : On vérifie le verrou
-                if not st.session_state.get('score_saved', False):
-                    if duree >= 0: 
-                        # ON VERROUILLE IMMEDIATEMENT AVANT L'APPEL RÉSEAU
-                        st.session_state['score_saved'] = True 
-                        with st.spinner("Enregistrement du score..."):
-                            enregistrer_score()
-                        st.success("✅ Score enregistré avec succès !")
-                    else:
-                        st.warning("Temps trop court pour être validé.")
+            st.info(st.session_state['last_res'])
+            if st.button("Question suivante ➡️"):
+                if idx < NB_QUESTIONS - 1:
+                    st.session_state['current_q_index'] += 1
+                    st.session_state['reponse_validee'] = False
                 else:
-                    st.info("👉 Votre score est déjà bien au chaud dans le classement.")
-            
-            if st.button("🔄 Recommencer"):
-                st.session_state['game_started'] = False
-                st.session_state['score_saved'] = False
+                    st.session_state['game_over'] = True
                 st.rerun()
 
-with tab_leaderboard:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("## 🏆 Classement par Moyenne")
-    
-    cat_filter = st.selectbox("Filtrer par catégorie :", ["Tout", "Capitalisation", "Actualisation", "VAN", "TAEG"])
-    
-    if st.button("🔄 Actualiser le classement"):
-        st.cache_data.clear()
-        st.rerun()
-
-    try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        df = conn.read(spreadsheet=url, ttl=0)
+    # --- ETAPE 3 : RESULTATS ---
+    else:
+        st.balloons()
+        st.markdown(f"## Terminé, {st.session_state.get('user_pseudo', 'Invité')} !")
+        st.markdown(f"### Votre score : {st.session_state['score']} / {NB_QUESTIONS}")
         
-        if df is not None and not df.empty:
-            if cat_filter != "Tout":
-                df_filtered = df[df["Thème"] == cat_filter]
-            else:
-                df_filtered = df
+        if st.session_state['is_challenge'] and not st.session_state.get('score_saved', False):
+            with st.spinner("Enregistrement..."):
+                enregistrer_score()
+            st.success("✅ Score enregistré !")
+        
+        if st.button("🔄 Recommencer"):
+            st.session_state['game_started'] = False
+            st.rerun()
 
-            if not df_filtered.empty:
-                stats = df_filtered.groupby("Pseudo").agg(
-                    Moyenne_Score=('Score', 'mean'),
-                    Nb_Quiz=('Score', 'count'),
-                    Meilleur_Temps=('Temps', 'min')
-                ).reset_index()
-
-                stats = stats.sort_values(by=["Moyenne_Score", "Nb_Quiz"], ascending=[False, False])
-                stats["Moyenne_Score"] = stats["Moyenne_Score"].round(2)
-                stats.index = range(1, len(stats) + 1)
-                
-                # FIX TAILLE : use_container_width=True pour remplir l'espace
-                st.dataframe(
-                    stats, 
-                    column_config={
-                        "Moyenne_Score": st.column_config.ProgressColumn(
-                            "Note Moyenne", 
-                            format="%.2f",
-                            min_value=0,
-                            max_value=NB_QUESTIONS
-                        ),
-                        "Nb_Quiz": st.column_config.NumberColumn("Parties Jouées"),
-                        "Meilleur_Temps": st.column_config.NumberColumn("Record (min)", format="%.1f")
-                    },
-                    width='stretch'
-                )
-            else:
-                st.info(f"Aucune donnée trouvée pour '{cat_filter}'.")
-        else:
-            st.warning("Le tableau des scores est vide.")
-
+with tab_leaderboard:
+    st.markdown("## 🏆 Classement par thème")
+    cat_filter = st.selectbox("Thème :", ["Tout le Programme", "Capitalisation et Actualisation", "Emprunts"], key="lb")
+    
+    try:
+        res = supabase.table("scores").select("pseudo, score, theme, temps").execute()
+        df = pd.DataFrame(res.data)
+        if not df.empty:
+            df_f = df[df["theme"] == cat_filter] if cat_filter != "Tout le Programme" else df
+            if not df_f.empty:
+                stats = df_f.groupby("pseudo").agg({'score': 'mean', 'pseudo': 'count', 'temps': 'min'}).rename(columns={'score': 'Moyenne', 'pseudo': 'Parties', 'temps': 'Record'}).reset_index()
+                st.dataframe(stats.sort_values("Moyenne", ascending=False), width='stretch')
     except Exception as e:
-        st.error(f"Impossible de charger le classement : {e}")
+        st.error(f"Erreur classement : {e}")

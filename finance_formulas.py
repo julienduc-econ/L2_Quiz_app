@@ -25,13 +25,11 @@ def capitalisation_auto(capital, taux_annuel_pct, duree, type_unite):
     if duree_annees > 1.0:
         # Composés
         montant = capital * ((1 + taux_annuel_pct/100) ** duree_annees)
-        mode = "Composés (> 1 an)"
     else:
         # Simples
         montant = capital * (1 + (taux_annuel_pct/100) * duree_annees)
-        mode = "Simples (≤ 1 an)"
         
-    return montant, mode
+    return montant
 
 def action(capital, taux_annuel_pct):
     for i in range(len(taux_annuel_pct)):
@@ -65,47 +63,17 @@ def find_r(K,VF,duree,type_unite):
     return r*100
 
 # ==========================================
-# 2. ACTUALISATION (Chercher la Valeur Actuelle - VA)
+# 2. EMPRUNTS
 # ==========================================
 
-def actu_simple(valeur_future, taux_annuel_pct, duree_annees):
-    # Actualisation rationnelle (Commerce) : VA = VF / (1 + t*n)
-    return valeur_future / (1 + (taux_annuel_pct/100) * duree_annees)
+def ann_csts(K, r, duree, differe, unite):
+    tx=r
+    if unite == "mois":
+        tx=r/12
+    m = K*((1+tx)**differe)*tx/(1-(1+tx)**(-duree))
+    c= duree*m-K
+    return m, c
 
-def actu_composee(valeur_future, taux_annuel_pct, duree_annees):
-    # Actualisation composée : VA = VF / (1 + t)^n
-    return valeur_future / ((1 + taux_annuel_pct/100) ** duree_annees)
-
-# ==========================================
-# 3. VAN (Valeur Actuelle Nette)
-# ==========================================
-
-def calcul_van(investissement, flux_tresorerie, taux_actualisation_pct):
-    """
-    investissement : float (positif, ce sera soustrait)
-    flux_tresorerie : list of floats [flux_annee_1, flux_annee_2, ...]
-    """
-    t = taux_actualisation_pct / 100
-    total_flux_actu = 0
-    
-    for i, flux in enumerate(flux_tresorerie):
-        annee = i + 1
-        total_flux_actu += flux / ((1 + t) ** annee)
-        
-    return total_flux_actu - investissement
-
-# ==========================================
-# 4. TAEG & TAUX
-# ==========================================
-
-def taux_equivalent_mensuel(taux_annuel_pct):
-    # (1+tm)^12 = 1+ta
-    ta = taux_annuel_pct / 100
-    tm = (1 + ta)**(1/12) - 1
-    return tm * 100
-
-def taux_proportionnel_mensuel(taux_annuel_pct):
-    return taux_annuel_pct / 12
 
 
 # ==========================================
