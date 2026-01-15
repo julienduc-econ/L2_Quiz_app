@@ -103,7 +103,7 @@ def generer_question(categorie_choisie):
             unite_rep = "€"
         else:
             VF = K * 1.5
-            enonce = f"Taux pour passer de **{fin.fmt(K)}** à **{fin.fmt(VF)}** en **{txt_duree}** ?"
+            enonce = f"Taux d'intérêt annuel pour passer de **{fin.fmt(K)}** à **{fin.fmt(VF)}** en **{txt_duree}** ?"
             sol = round(fin.find_r(K, VF, valeur_temps, type_unite), 2)
             unite_rep = "%"
         return {"cat": cat_active, "txt": enonce, "sol": sol, "unit": unite_rep}
@@ -140,9 +140,21 @@ with tab_jeu:
     # --- ETAPE 1 : ACCUEIL ---
     if not st.session_state['game_started']:
         st.markdown("## 🎓 Quiz de Mathématiques Financières")
-        st.markdown("""<p style="font-size:20px;">Ce site est dédié au cours de Mathématiques Financières...</p>""", unsafe_allow_html=True)
+        st.markdown(
+    """
+    <p style="font-size:20px;">
+        Ce site est dédié au cours de <a href="https://julienduc-econ.github.io/L2_MF/" target="_blank">Mathématiques Financières</a> dispensé en L2 à l'IAE de Nantes. 
+        Les questions et les valeurs numériques sont générés aléatoirement. 
+        Chaque thème dispose d'environ 20 types de questions. 
+        Vous pouvez effectuer autant de quizs que vous souhaitez.
+    </p>
+    """, 
+    unsafe_allow_html=True
+)
+
 
         choix_cat = st.selectbox("Thème", ["Tout le Programme", "Capitalisation et Actualisation", "Emprunts"])
+        st.info("Le mode **Challenge** enregistre votre score pour le classement général.")
         mode_ch = st.checkbox("🏆 Activer le Mode Challenge (Enregistre votre score)", value=False)
 
         pseudo, code_prive = None, None
@@ -150,7 +162,7 @@ with tab_jeu:
             st.info("⚠️ Identifiants requis pour le classement.")
             col1, col2 = st.columns(2)
             pseudo = col1.text_input("Pseudo (public)")
-            code_prive = col2.text_input("Code privé (secret)", type="password")
+            code_prive = col2.text_input("PIN (secret)", type="password")
 
             user_exists = False
             nom, prenom = "", ""
@@ -158,10 +170,11 @@ with tab_jeu:
                 res = supabase.table("profiles").select("*").eq("pseudo", pseudo).execute()
                 user_exists = len(res.data) > 0
                 if not user_exists:
-                    st.warning("✨ Nouveau profil !")
+                    st.warning("✨ Nouveau profil ! ⚠️ Conservez votre **Pseudo** et **PIN** afin de garder votre progression.")
                     c1, c2 = st.columns(2)
                     nom = c1.text_input("Nom de famille")
                     prenom = c2.text_input("Prénom")
+
 
         if st.button("🚀 Commencer"):
             if mode_ch:
